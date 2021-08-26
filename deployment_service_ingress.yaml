@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-test
+  labels:
+    apps: nginx
+spec:
+  selector:
+    matchLabels:
+      apps: nginx
+  template:
+    metadata:
+      name: nginx-test
+      labels:
+        apps: nginx
+    spec:
+      containers:
+      - name: nginx-test
+        image: nginx
+        imagePullPolicy: IfNotPresent
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-test
+  labels:
+    apps: nginx
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    apps: nginx
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-test
+spec:
+  rules:
+  - host: myapp.ingress.com         #自定义域名，访问时记得配hosts解析
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: nginx-test
+          servicePort: 80 
