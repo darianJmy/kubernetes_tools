@@ -1,5 +1,10 @@
-FROM ubuntu:latest
+FROM alpine:3.14.1
 ENV AUTHOR="jixingxing" PWD="."
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install keepalived -y
-CMD service keepalived start  && tail -f /dev/null
+RUN set -x \
+    && apk add --no-cache \
+    keepalived \
+    socat \
+    nftables
+
+ENTRYPOINT ["/usr/sbin/keepalived", "-l", "-n"]

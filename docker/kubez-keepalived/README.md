@@ -35,7 +35,7 @@ vrrp_instance MAIN {
   interface ens192
   #50 默认50即可
   virtual_router_id 50
-  #200 为权重比,backup需比200低
+  #150 为权重比,backup需比200低
   priority 150
   advert_int 1
   authentication {
@@ -52,11 +52,11 @@ vrrp_instance MAIN {
 
 - 启动代理服务
 ```
-docker run -d --name <container_name> --privileged=true -v /etc/keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host jixingxing/keepalived:v0.0.1
+docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host jixingxing/keepalived:v0.0.1
 ```
 
 - 检查服务已经正常启动
 ```
 [root@kube02]# docker ps -a |grep jixingxing
-c5cad90e9a9a        jixingxing/keepalived:v0.0.1                                    "/bin/sh -c 'service…"   14 seconds ago      Up 13 seconds                                 amazing_zhukovsky
+c5cad90e9a9a        jixingxing/keepalived:v0.0.1  "/bin/sh -c 'service…"   14 seconds ago      Up 13 seconds                      amazing_zhukovsky
 ```
