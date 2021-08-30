@@ -52,7 +52,7 @@ vrrp_instance MAIN {
 
 - 启动代理服务
 ```
-docker run -d --name <container_name> --privileged=true -v /etc/keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host jixingxing/keepalived:v0.0.1
+docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host jixingxing/keepalived:v0.0.1
 ```
 
 - 检查服务已经正常启动
