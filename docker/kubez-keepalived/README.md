@@ -58,5 +58,5 @@ docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepal
 - 检查服务已经正常启动
 ```
 [root@kube02]# docker ps -a |grep jixingxing
-c5cad90e9a9a        jixingxing/keepalived:v0.0.1                                    "/bin/sh -c 'service…"   14 seconds ago      Up 13 seconds                                 amazing_zhukovsky
+c5cad90e9a9a        jixingxing/keepalived:v0.0.1  "/bin/sh -c 'service…"   14 seconds ago      Up 13 seconds                      amazing_zhukovsky
 ```
