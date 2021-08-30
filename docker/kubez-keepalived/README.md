@@ -35,7 +35,7 @@ vrrp_instance MAIN {
   interface ens192
   #50 默认50即可
   virtual_router_id 50
-  #200 为权重比,backup需比200低
+  #150 为权重比,backup需比200低
   priority 150
   advert_int 1
   authentication {
