@@ -1,7 +1,7 @@
 # Kubez-haproxy
 
 
-- 在node01节点创建 `kubez haproxy` 配置 `/var/lib/kubez-haproxy/haproxy.cfg`, 只需配置`listen`
+- 在node01节点创建 `kubez haproxy` 配置 `/var/lib/kubez-tools/haproxy.cfg`, 只需配置`listen`
 
 ```
 listen mariadb
@@ -14,7 +14,7 @@ listen mariadb
 
 - 启动代理服务
 ```
-docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/:/etc/haproxy/ --net=host 10.10.33.31:5000/jixingxing/kubez-haproxy:v0.0.4
+docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-tools/:/etc/haproxy/ --net=host 10.10.33.31:5000/jixingxing/kubez-haproxy:v0.0.4
 ```
 
 - 检查服务已经正常启动
