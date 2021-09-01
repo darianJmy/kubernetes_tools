@@ -5,7 +5,7 @@
 
 ```
 listen mariadb
-   bind 10.10.33.35:3306
+   bind 10.10.33.35:3316
    mode tcp
    server mariadb01 10.10.33.32:3306 maxconn 32
    server mariadb02 10.10.33.33:3306 maxconn 32
