@@ -2,9 +2,16 @@
 # Kubez-keepalived
 
 
-- 在master节点创建 `kubez keepalived` 配置 `/var/lib/kubez-keepalived/keepalived.conf`
+- 在node01节点创建 `kubez keepalived` 配置 `/var/lib/kubez-keepalived/keepalived.conf`
 
 ```
+#vrrp_script 主要使keepalived监测业务判断需不需要切换vip
+vrrp_script checkhaproxy
+{
+    script "sh /etc/keepalived/mycheckscript.sh"
+    interval 3
+    weight -20
+}
 vrrp_instance MAIN {
   state MASTER
   #ens192 可改为实际机器端口
@@ -13,6 +20,8 @@ vrrp_instance MAIN {
   virtual_router_id 50
   #200 为权重比,backup需比200低
   priority 200
+  #设置了nopreempt，即使恢复也不会抢占master
+  #nopreempt
   advert_int 1
   authentication {
     #认证密码默认即可
@@ -23,12 +32,22 @@ vrrp_instance MAIN {
     #VIP 地址
     10.10.33.35
   }
+  track_script {
+    checkhaproxy
+  }
 }
 ```
 
-- 在backup节点创建 `kubez keepalived` 配置 `/var/lib/kubez-keepalived/keepalived.conf`
+- 在node02节点创建 `kubez keepalived` 配置 `/var/lib/kubez-keepalived/keepalived.conf`
 
 ```
+#vrrp_script 主要使keepalived监测业务判断需不需要切换vip
+vrrp_script checkhaproxy
+{
+    script "sh /etc/keepalived/mycheckscript.sh"
+    interval 3
+    weight -20
+}
 vrrp_instance MAIN {
   state BACKUP
   #ens192 可改为实际机器端口
@@ -47,12 +66,15 @@ vrrp_instance MAIN {
     #VIP 地址
     10.10.33.35
   }
+  track_script {
+    checkhaproxy
+  }
 }
 ```
 
 - 启动代理服务
 ```
-docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host jixingxing/keepalived:v0.0.1
+docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/keepalived.conf:/etc/keepalived/keepalived.conf --net=host --pid=host jixingxing/keepalived:v0.0.1
 ```
 
 - 检查服务已经正常启动
