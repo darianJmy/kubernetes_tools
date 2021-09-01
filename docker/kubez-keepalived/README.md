@@ -2,7 +2,7 @@
 # Kubez-keepalived
 
 
-- 在node01节点创建 `kubez keepalived` 配置 `/var/lib/kubez-keepalived/keepalived.conf`
+- 在node01节点创建 `kubez keepalived` 配置 `/var/lib/kubez-tools/keepalived.conf`
 
 ```
 #vrrp_script 主要使keepalived监测业务判断需不需要切换vip
