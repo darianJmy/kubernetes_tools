@@ -14,7 +14,7 @@ listen mariadb
 
 - 启动代理服务
 ```
-docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/haproxy.cfg:/etc/haproxy/haproxy.cfg --net=host 10.10.33.31:5000/jixingxing/kubez-haproxy:v0.0.4
+docker run -d --name <container_name> --privileged=true -v /var/lib/kubez-keepalived/:/etc/haproxy/ --net=host 10.10.33.31:5000/jixingxing/kubez-haproxy:v0.0.4
 ```
 
 - 检查服务已经正常启动
