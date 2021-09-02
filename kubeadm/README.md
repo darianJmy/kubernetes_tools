@@ -204,3 +204,7 @@ kube-system   kube-scheduler-master            1/1     Running   1          8h
 ```
 
 - TODO: `patch`的子网应该在`kubeadm init`时带入进去，需要研究kubeadm init参数与自定义参数，达到效果跟二进制安装无差别
+
+| 协议   | 方向  | 端口范围 | 作用 | 使用者 |
+| :---- | :----  | :---- | :---- | :---- |
+| 协议   | 方向  | 端口范围 | 作用 | 使用者 |
