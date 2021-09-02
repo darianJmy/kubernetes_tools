@@ -27,9 +27,9 @@ node:   kubeadm、kubelet、docker
 
 - 单节点安装步骤
 
-确保 br_netfilter 模块被加载。这一操作可以通过运行 lsmod | grep br_netfilter 来完成。若要显式加载该模块，可执行 sudo modprobe br_netfilter。
+确保 `br_netfilter` 模块被加载。这一操作可以通过运行 `lsmod | grep br_netfilter` 来完成。若要显式加载该模块，可执行 `sudo modprobe br_netfilter`。
 
-为了让你的 Linux 节点上的 iptables 能够正确地查看桥接流量，你需要确保在你的 sysctl 配置中将 net.bridge.bridge-nf-call-iptables 设置为 1。
+为了让你的 `Linux` 节点上的 `iptables` 能够正确地查看桥接流量，你需要确保在你的 `sysctl` 配置中将 `net.bridge.bridge-nf-call-iptables` 设置为 `1`。
 ```
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 br_netfilter
