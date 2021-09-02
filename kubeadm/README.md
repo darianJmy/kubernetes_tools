@@ -19,9 +19,10 @@ node:   kubeadm、kubelet、docker
 ```
 工作节点
 ```
-协议	方向	端口范围	     作用	         使用者
-TCP	入站	10250	      Kubelet API	   kubelet 自身、控制平面组件
-TCP	入站	30000-32767	NodePort 服务†	 所有组件
+| 协议 | 方向 | 端口范围 | 作用 |  使用者|
+| --- | --- | --- | --- | --- |
+| TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
+| TCP | 入站 | 30000-32767 | NodePort 服务† | 所有组件 |
 ```  
 
 - 单节点安装步骤
