@@ -15,22 +15,13 @@ node:   kubeadm、kubelet、docker
 | TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
 | TCP | 入站 | 10251 | kube-scheduler | kube-scheduler 自身 |
 | TCP | 入站 | 10252 | kube-controller-manager | kube-controller-manager 自身 |
-```
-| 协议 | 方向 | 端口范围 | 作用 |  使用者|
-| --- | --- | --- | --- | --- |
-| TCP | 入站 | 6443 | Kubernetes API 服务器 | 所有组件 |
-| TCP | 入站 | 2379-2380 | etcd 服务器客户端 API | kube-apiserver, etcd |
-| TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
-| TCP | 入站 | 10251 | kube-scheduler | kube-scheduler 自身 |
-| TCP | 入站 | 10252 | kube-controller-manager | kube-controller-manager 自身 |
-```
+
 工作节点
-```
 | 协议 | 方向 | 端口范围 | 作用 |  使用者|
 | --- | --- | --- | --- | --- |
 | TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
 | TCP | 入站 | 30000-32767 | NodePort 服务† | 所有组件 |
-```  
+ 
 
 - 单节点安装步骤
 
