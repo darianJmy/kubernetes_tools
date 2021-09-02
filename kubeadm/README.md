@@ -6,7 +6,7 @@ master: kubeadm、kubelet、kubectl、docker
 node:   kubeadm、kubelet、docker
 ```
 - 需要注意的端口
-  - 控制平面节点 
+ - 控制平面节点 
 ```
 协议	方向	端口范围	     作用	                   使用者
 TCP	入站	6443	      Kubernetes API           服务器	所有组件
