@@ -6,30 +6,25 @@ master: kubeadm、kubelet、kubectl、docker
 node:   kubeadm、kubelet、docker
 ```
 - 需要注意的端口
-
-控制平面节点 
+  - 控制平面节点 
 ```
-| 协议 | 方向 | 端口范围 | 作用 |  使用者|
-| --- | --- | --- | --- | --- |
-| TCP | 入站 | 6443 | Kubernetes API 服务器 | 所有组件 |
-| TCP | 入站 | 2379-2380 | etcd 服务器客户端 API | kube-apiserver, etcd |
-| TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
-| TCP | 入站 | 10251 | kube-scheduler | kube-scheduler 自身 |
-| TCP | 入站 | 10252 | kube-controller-manager | kube-controller-manager 自身 |
+协议	方向	端口范围	     作用	                   使用者
+TCP	入站	6443	      Kubernetes API           服务器	所有组件
+TCP	入站  2379-2380   etcd                     服务器客户端 API	kube-apiserver, etcd
+TCP	入站	10250	      Kubelet API	             kubelet 自身、控制平面组件
+TCP	入站	10251	      kube-scheduler	          kube-scheduler 自身
+TCP	入站	10252	      kube-controller-manager  kube-controller-manager 自身
 ```
-工作节点
+  - 工作节点
 ```
-| 协议 | 方向 | 端口范围 | 作用 |  使用者|
-| --- | --- | --- | --- | --- |
-| TCP | 入站 | 10250 | Kubelet API | kubelet 自身、控制平面组件 |
-| TCP | 入站 | 30000-32767 | NodePort 服务† | 所有组件 |
+协议	方向	端口范围	     作用	                   使用者
+TCP	入站	10250	      Kubelet API	             kubelet 自身、控制平面组件
+TCP	入站	30000-32767	NodePort服务†             所有组件
 ```  
 
 - 单节点安装步骤
-
-确保 `br_netfilter` 模块被加载。这一操作可以通过运行 `lsmod | grep br_netfilter` 来完成。若要显式加载该模块，可执行 `sudo modprobe br_netfilter`。
-
-为了让你的 `Linux` 节点上的 `iptables` 能够正确地查看桥接流量，你需要确保在你的 `sysctl` 配置中将 `net.bridge.bridge-nf-call-iptables` 设置为 `1`。
+  - 确保 br_netfilter 模块被加载。这一操作可以通过运行 lsmod | grep br_netfilter 来完成。若要显式加载该模块，可执行 sudo modprobe br_netfilter。
+  - 为了让你的 Linux 节点上的 iptables 能够正确地查看桥接流量，你需要确保在你的 sysctl 配置中将 net.bridge.bridge-nf-call-iptables 设置为 1。
 ```
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 br_netfilter
@@ -206,3 +201,46 @@ kube-system   kube-scheduler-master            1/1     Running   1          8h
 ```
 
 - TODO: `patch`的子网应该在`kubeadm init`时带入进去，需要研究kubeadm init参数与自定义参数，达到效果跟二进制安装无差别
+
+协议	方向	端口范围	     作用	         使用者
+TCP	入站	10250	      Kubelet API	   kubelet 自身、控制平面组件
+TCP	入站	30000-32767	NodePort 服务†	 所有组件
+协议	方向	端口范围	作用	使用者
+TCP	入站	6443	Kubernetes API 服务器	所有组件
+TCP	入站	2379-2380	etcd 服务器客户端 API	kube-apiserver, etcd
+TCP	入站	10250	Kubelet API	kubelet 自身、控制平面组件
+TCP	入站	10251	kube-scheduler	kube-scheduler 自身
+TCP	入站	10252	kube-controller-manager	kube-controller-manager 自身
+
+协议	方向	端口范围	     作用	         使用者
+TCP	入站	10250	      Kubelet API	   kubelet 自身、控制平面组件
+TCP	入站	30000-32767	NodePort 服务†	 所有组件
+| 协议 | 方向 | 端口范围 | 作用 | 使用者 |
+| :---- | :---- | :---- | :---- | :---- |
+| TCP | 入站 | 6443 | Kubernetes API 服务器 | 所有组件 |
+| TCP	| 入站 | 2379-2380 | etcd 服务器客户端 API |	kube-apiserver, etcd |
+| TCP	| 入站 | 10250	| Kubelet API | kubelet 自身、控制平面组件 |
+| TCP	| 入站 | 10251	| kube-scheduler | kube-scheduler 自身 |
+| TCP | 入站 | 10252 | kube-controller-manager | kube-controller-manager 自身 |
+| :---- | ----: | :----: |
+| 单元格 | 单元格 | 单元格 |
+| 单元格 | 单元格 | 单元格 |
+
+ | 水果        | 价格    |  数量  |
+    | --------   | -----:   | :----: |
+    | 香蕉        | $1      |   5    |
+    | 苹果        | $1      |   6    |
+    | 草莓        | $1      |   7    |
+
+        | 水果        | 价格    |  数量  |
+    | --------   | -----:   | :----: |
+    | 香蕉        | $1      |   5    |
+    | 苹果        | $1      |   6    |
+    | 草莓        | $1      |   7    |
+
+
+    | 水果        | 价格    |  数量  |  作用  ｜  使用者  ｜
+    | --------   | -----:   | :----: | :----: | :----: |
+    | TCP        | $1      |   5    |
+    | TCP        | $1      |   6    |
+    | TCP        | $1      |   7    |

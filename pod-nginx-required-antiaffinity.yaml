@@ -1,0 +1,21 @@
+#反亲和性需要给node节点打标签
+#kubectl label node kube03 disktype=ssd
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: disktype
+            #主要是这边判断状态In、NotIn、Exists、DoesNotExist、Gt、Lt
+            operator: NotIn
+            values:
+            - ssd            
+  containers:
+  - name: nginx
+    image: nginx
+    imagePullPolicy: IfNotPresent
