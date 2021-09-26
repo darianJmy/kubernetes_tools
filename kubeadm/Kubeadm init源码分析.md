@@ -15,5 +15,5 @@
 	initRunner.AppendPhase(phases.NewMarkControlPlanePhase())
 	initRunner.AppendPhase(phases.NewBootstrapTokenPhase())
 	initRunner.AppendPhase(phases.NewKubeletFinalizePhase())
-	initRunner.AppendPhase(phases.NewAddonPhase())，主要包含：环境检测、配置加载集群初始化、安装后配置等步骤。
+	initRunner.AppendPhase(phases.NewAddonPhase())
 ```
