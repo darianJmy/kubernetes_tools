@@ -144,6 +144,7 @@ enabled=0
 gpgcheck=1
 gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
 
+
 EOF
 ```
   - 控制节点安装服务组件
