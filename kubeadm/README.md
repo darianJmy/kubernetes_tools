@@ -147,7 +147,7 @@ EOF
 ```
   - 控制节点安装服务组件
 ```
-yum install -y kubelet-1.18.6 kubeadm-1.18.6 kubectl-1.18.6 docker
+yum install -y kubelet-1.18.6 kubeadm-1.18.6 kubectl-1.18.6 docker-ce
 ```
   - 配置`daemon.json`与启动`docker`
 ```
