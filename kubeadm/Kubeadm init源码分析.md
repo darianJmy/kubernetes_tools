@@ -513,8 +513,36 @@ return workflow.Phase{
 //这边为非data.UploadCerts，init一般不带UploadCerts参数所以默认不执行
 if !data.UploadCerts() {
 	fmt.Printf("[upload-certs] Skipping phase. Please see --%s\n", options.UploadCerts)
-	return nil
+	return nil	
 }    
+
+//这边主要是通过client调用的CreateOrUpdateSecret函数，分别创建了secret与rbac。
+err = apiclient.CreateOrUpdateSecret(client, &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            kubeadmconstants.KubeadmCertsSecret,
+			Namespace:       metav1.NamespaceSystem,
+			OwnerReferences: ref,
+		},
+		Data: secretData,
+	})
+	if err != nil {
+		return err
+	}
+
+	return createRBAC(client)
+
+func CreateOrUpdateSecret(client clientset.Interface, secret *v1.Secret) error {
+	if _, err := client.CoreV1().Secrets(secret.ObjectMeta.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return errors.Wrap(err, "unable to create secret")
+		}
+
+		if _, err := client.CoreV1().Secrets(secret.ObjectMeta.Namespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+			return errors.Wrap(err, "unable to update secret")
+		}
+	}
+	return nil
+}
 ```
 ##### 10、在NewMarkControlPlanePhase函数里找到workflow.Phase结构体里面的Run对应的runMarkControlPlane
 ```
@@ -711,4 +739,37 @@ deploymentsClient := client.AppsV1().Deployments(metav1.NamespaceSystem)
   2、kubectl get role -A
   3、kubectl get serviceaccout -A
   4、NewBootstrapTokenPhase平面里创建的bootstrap的token与rbac作用是干嘛的？
+
+//这边的 serviceaccount、secrets、role 注意观察的话会发现都是以 controller 的名字为开头的
+//观察过后发现 kube-controller-manager.yaml 里有 --use-service-account-credentials=true 这个参数
+//查看参数代码后发现参数作用
+
+//这边生成一个新的客户端，提示了如果这个参数，或者没有其他控制器创建 serviceacconut，后续会超时
+if c.ComponentConfig.KubeCloudShared.UseServiceAccountCredentials {
+		if len(c.ComponentConfig.SAController.ServiceAccountKeyFile) == 0 {
+			// It's possible another controller process is creating the tokens for us.
+			// If one isn't, we'll timeout and exit when our client builder is unable to create the tokens.
+			klog.Warningf("--use-service-account-credentials was specified without providing a --service-account-private-key-file")
+		}
+
+		clientBuilder = clientbuilder.NewDynamicClientBuilder(
+			restclient.AnonymousClientConfig(c.Kubeconfig),
+			c.Client.CoreV1(),
+			metav1.NamespaceSystem)
+	} else {
+		clientBuilder = rootClientBuilder
+	}  
+
+//定义一个serviceaccount控制器
+saTokenControllerInitFunc := serviceAccountTokenControllerStarter{rootClientBuilder: rootClientBuilder}.startServiceAccountTokenController
+
+run := func(ctx context.Context, startSATokenController InitFunc, initializersFunc ControllerInitializersFunc) 
+
+//run 时会根据控制器名称初始化创建 serviceaccount
+// No leader election, run directly
+if !c.ComponentConfig.Generic.LeaderElection.LeaderElect {
+	run(context.TODO(), saTokenControllerInitFunc, NewControllerInitializers)
+	panic("unreachable")
+}
+
 ```
