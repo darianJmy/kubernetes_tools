@@ -738,13 +738,12 @@ deploymentsClient := client.AppsV1().Deployments(metav1.NamespaceSystem)
   1、kubectl get secrets -A 发现非常多的证书，哪来的？
   2、kubectl get role -A
   3、kubectl get serviceaccout -A
-  4、NewBootstrapTokenPhase平面里创建的bootstrap的token与rbac作用是干嘛的？
 
 //这边的 serviceaccount、secrets、role 注意观察的话会发现都是以 controller 的名字为开头的
 //观察过后发现 kube-controller-manager.yaml 里有 --use-service-account-credentials=true 这个参数
 //查看参数代码后发现参数作用
 
-//这边生成一个新的客户端，提示了如果这个参数，或者没有其他控制器创建 serviceacconut，后续会超时
+//这边生成一个新的客户端，提示了如果没有这个参数或者没有其他控制器创建 serviceacconut，后续会超时
 if c.ComponentConfig.KubeCloudShared.UseServiceAccountCredentials {
 		if len(c.ComponentConfig.SAController.ServiceAccountKeyFile) == 0 {
 			// It's possible another controller process is creating the tokens for us.
