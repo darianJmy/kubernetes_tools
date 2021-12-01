@@ -35,7 +35,7 @@ if !data.DryRun() {
 	}
 ```
 
-##### 3、系统检测方便主要检测了以下部分
+##### 3、系统检测方面主要检测了以下部分
 ```
 //这边判断是否 ignore error
 if !isSecondaryControlPlane {
@@ -135,4 +135,49 @@ func (ncc NumCPUCheck) Check() (warnings, errorList []error) {
 }
 ```
 
+##### 3、镜像检测方面主要检测了以下部分
+```
+	// 主要是收集信息到数组里面，最后执行 RunChecks 函数检测
+	// 这边有个 cfg.NodeRegistration.ImagePullPolicy 变量，主要是init执行这些平面前有一个初始化默认配置的步骤
+	checks := []Checker{
+			ImagePullCheck{runtime: containerRuntime, imageList: images.GetControlPlaneImages(&cfg.ClusterConfiguration), imagePullPolicy: cfg.NodeRegistration.ImagePullPolicy},
+		}
 
+// Name returns the label for ImagePullCheck
+func (ImagePullCheck) Name() string {
+	return "ImagePull"
+}
+
+// Check pulls images required by kubeadm. This is a mutating check
+func (ipc ImagePullCheck) Check() (warnings, errorList []error) {
+	policy := ipc.imagePullPolicy
+	klog.V(1).Infof("using image pull policy: %s", policy)
+	for _, image := range ipc.imageList {
+		switch policy {
+		case v1.PullNever:
+			klog.V(1).Infof("skipping pull of image: %s", image)
+			continue
+		case v1.PullIfNotPresent:
+			ret, err := ipc.runtime.ImageExists(image)
+			if ret && err == nil {
+				klog.V(1).Infof("image exists: %s", image)
+				continue
+			}
+			if err != nil {
+				errorList = append(errorList, errors.Wrapf(err, "failed to check if image %s exists", image))
+			}
+			fallthrough // Proceed with pulling the image if it does not exist
+		case v1.PullAlways:
+			klog.V(1).Infof("pulling: %s", image)
+			if err := ipc.runtime.PullImage(image); err != nil {
+				errorList = append(errorList, errors.Wrapf(err, "failed to pull image %s", image))
+			}
+		default:
+			// If the policy is unknown return early with an error
+			errorList = append(errorList, errors.Errorf("unsupported pull policy %q", policy))
+			return warnings, errorList
+		}
+	}
+	return warnings, errorList
+}		
+```
