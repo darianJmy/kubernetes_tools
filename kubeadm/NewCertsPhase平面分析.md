@@ -51,7 +51,7 @@ subPhases = append(subPhases, allPhase)
 //certsphase.GetDefaultCertList() 存放了 ca 的结构体函数
 for _, cert := range certsphase.GetDefaultCertList() {
 		var phase workflow.Phase
-        //结构体里有CAName这个数据，如果结构体CAName为"", 那么定义这个平面的 run 为 runCAPhase(cert), 如果有定义平面的 run 为 runCertPhase(cert, lastCACert)
+        //结构体里有CAName这个数据，如果结构体CAName为"", 那么定义这个平面的 run 为 runCAPhase(cert), 如果有定义平面的 run 为 runCertPhase(cert, lastCACert), range 循环 GetDefaultCertList是有顺序的，第一个结构体为 ca 结构体，ca 结构体 ca.Name 为 "",所以会执行 runCAPhase(cert) 函数生成ca文件，之后 apiserver 的 runCertPhase 函数会用到 lastCaert 结构体生成 apiserver 证书
 		if cert.CAName == "" {
 			phase = newCertSubPhase(cert, runCAPhase(cert))
 			lastCACert = cert
