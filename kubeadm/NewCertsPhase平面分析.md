@@ -1,8 +1,8 @@
 # NewCertsPhase 平面分析
 ###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewCertsPhase平面主要工作是检查环境
+##### NewCertsPhase平面主要工作是生成证书
 
-##### 1、Certs 平面涉及子平面，运行内容全在 runCerts 函数中
+##### 1、Certs 平面涉及子平面，runCerts 函数负责 Print 提示，主要创建任务还是在子平面里
 ```
 //newCertSubPhases() 为子平面, kubeadm init phase certs all 会先执行 runCerts，runCerts 执行完毕再执行子平面等到所有函数处理结束返回结构体
 return workflow.Phase{
