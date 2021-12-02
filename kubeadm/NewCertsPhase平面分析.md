@@ -4,7 +4,7 @@
 
 ##### 1、Certs 平面涉及子平面，运行内容全在 runCerts 函数中
 ```
-//newCertSubPhases() 为子平面, kubeadm init phase certs all 会先执行runCerts，runCerts执行完毕再执行子平面等到所有函数处理结束返回结构体
+//newCertSubPhases() 为子平面, kubeadm init phase certs all 会先执行 runCerts，runCerts 执行完毕再执行子平面等到所有函数处理结束返回结构体
 return workflow.Phase{
 	Name:   "certs",
 	Short:  "Certificate generation",
@@ -14,7 +14,7 @@ return workflow.Phase{
 }
 ```
 
-##### 2、runCerts 函数会 print 一些数据作为生成执行证书的提示，输出后会检测初始化有没有外部ca的情况，如果有外部ca，生成证书这个平面不会执行
+##### 2、runCerts 函数会 print 一些数据作为生成执行证书的提示，输出后会检测初始化有没有外部 ca 的情况，如果有外部 ca，生成证书这个平面不会执行
 ```
 fmt.Printf("[certs] Using certificateDir folder %q\n", data.CertificateWriteDir())
 
@@ -33,9 +33,9 @@ if data.ExternalCA() && data.DryRun() {
 	}
 ```
 
-##### 3、newCertSubPhases() 子平面作为主要执行创建ca的任务
+##### 3、newCertSubPhases() 子平面作为主要执行创建 ca 的任务
 ```
-//这边定一个子平面的结构体，通过 append 追加各个证书结构体到subPhases结构体中，最后执行for循环执行结构体
+//这边定一个子平面的结构体，通过 append 追加各个证书结构体到 subPhases 结构体中，最后执行 range 循环执行结构体
 subPhases := []workflow.Phase{}
 
 //RunAllSiblings 这个为true，代表着执行相同等级的所有平面
@@ -51,7 +51,10 @@ subPhases = append(subPhases, allPhase)
 //certsphase.GetDefaultCertList() 存放了 ca 的结构体函数
 for _, cert := range certsphase.GetDefaultCertList() {
 		var phase workflow.Phase
-        //结构体里有CAName这个数据，如果结构体CAName为"", 那么定义这个平面的 run 为 runCAPhase(cert), 如果有定义平面的 run 为 runCertPhase(cert, lastCACert), range 循环 GetDefaultCertList是有顺序的，第一个结构体为 ca 结构体，ca 结构体 ca.Name 为 "",所以会执行 runCAPhase(cert) 函数生成ca文件，之后 apiserver 的 runCertPhase 函数会用到 lastCaert 结构体生成 apiserver 证书
+        //结构体里有CAName这个数据，如果结构体 CAName 为 "", 那么定义这个平面的 run 为 runCAPhase(cert), 
+		//如果有定义平面的 run 为 runCertPhase(cert, lastCACert), range 循环 GetDefaultCertList 是有顺序的，
+		//第一个结构体为 ca 结构体，ca 结构体 ca.Name 为 "",所以会执行 runCAPhase(cert) 函数生成ca文件，
+		//之后 apiserver 的 runCertPhase 函数会用到 lastCaert 结构体生成 apiserver 证书
 		if cert.CAName == "" {
 			phase = newCertSubPhase(cert, runCAPhase(cert))
 			lastCACert = cert
@@ -111,7 +114,8 @@ func KubeadmCertAPIServer() *KubeadmCert {
 	}
 }
 
-//除了上面的 for 循环获取的平面后，最后还定义了一个 sa 平面，每个平面都会生成crt、key，sa平面会生成pub、key，所有平面如下：
+//除了上面的 range 循环获取的平面后，最后还定义了一个 sa 平面，每个平面都会生成 crt、key，sa 平面会生成 pub、key
+//所有平面如下：
 // "ca"
 // "apiserver"
 // "apiserver-kubelet-client"
@@ -134,7 +138,7 @@ func KubeadmCertAPIServer() *KubeadmCert {
 	}
 ```
 
-##### 4、runCAPhase(cert) 函数把 证书的结构体传进来处理
+##### 4、runCAPhase(cert) 函数把证书的结构体传进来处理
 ```
 // 如果初始化有外部 etcd 与 ca.Name 等于 etcd-ca 则直接返回
 // if using external etcd, skips etcd certificate authority generation
@@ -143,7 +147,8 @@ func KubeadmCertAPIServer() *KubeadmCert {
 			return nil
 		}
 
-//这边加载 ca.BaseName，这个时候如果你有证书文件 crt 存在并且有内容，则会报错，直接 fmt.Printf 返回 nil，如果没有 crt 文件存在，再检查 key 文件是否存在。
+//这边加载 ca.BaseName，这个时候如果你有证书文件 crt 存在并且有内容则会报错，直接 fmt.Printf 返回 nil，
+//如果没有 crt 文件存在，再检查 key 文件是否存在。
 if cert, err := pkiutil.TryLoadCertFromDisk(data.CertificateDir(), ca.BaseName); err == nil {
 			certsphase.CheckCertificatePeriodValidity(ca.BaseName, cert)
 
@@ -160,7 +165,7 @@ func TryLoadCertFromDisk(pkiPath, name string) (*x509.Certificate, error) {
     //pathForCert主要是 join pkiPaht，name 连接字符串用的
 	certificatePath := pathForCert(pkiPath, name)
 
-    //CertsFromFile 判断 certs是否正确
+    //CertsFromFile 判断 certs 是否正确
 	certs, err := certutil.CertsFromFile(certificatePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "couldn't load the certificate file %s", certificatePath)
@@ -173,10 +178,10 @@ func TryLoadCertFromDisk(pkiPath, name string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-//所有检测都过了，没有外部etcd，没有外部ca，没有crt、key文件，则创建新的证书文件
+//所有检测都过了，没有外部 etcd，没有外部 ca，没有 crt、key 文件，则创建新的证书文件
 return certsphase.CreateCACertAndKeyFiles(ca, cfg)
-//CreateCACertAndKeyFiles 函数主要为创建这些数据，把这些数据写入文件
 
+//CreateCACertAndKeyFiles 函数主要为创建这些数据，把这些数据写入文件
 caCert, caKey, err := pkiutil.NewCertificateAuthority(certConfig)
 	if err != nil {
 		return err
@@ -188,6 +193,7 @@ return writeCertificateAuthorityFilesIfNotExist(
 		caCert,
 		caKey,
 	)
+
 先格式化 key 内容通过 x509
 // MarshalPrivateKeyToPEM converts a known private key type of RSA or ECDSA to
 // a PEM encoded block or returns an error.
@@ -219,7 +225,7 @@ if err := pkiutil.WriteCertAndKey(pkiDir, baseName, caCert, caKey); err != nil {
 			return errors.Wrapf(err, "failure while saving %s certificate and key", baseName)
 		}
 
-//最终县创建文件给0755权限，在写入文件给0600权限
+//最终先创建文件给 0755 权限，在写入文件给 0600 权限
 func WriteKey(keyPath string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(keyPath), os.FileMode(0755)); err != nil {
 		return err
