@@ -37,9 +37,9 @@ if !data.DryRun() {
 
 ##### 3、系统检测方面主要检测了以下部分
 ```
-//这边判断是否 ignore error
 if !isSecondaryControlPlane {
 		// First, check if we're root separately from the other preflight checks and fail fast
+		//判断是否是特权用户，不然快速失败
 		if err := RunRootCheckOnly(ignorePreflightErrors); err != nil {
 			return err
 		}
