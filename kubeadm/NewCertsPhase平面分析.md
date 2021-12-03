@@ -181,7 +181,7 @@ func TryLoadCertFromDisk(pkiPath, name string) (*x509.Certificate, error) {
 //所有检测都过了，没有外部 etcd，没有外部 ca，没有 crt、key 文件，则创建新的证书文件
 return certsphase.CreateCACertAndKeyFiles(ca, cfg)
 
-//CreateCACertAndKeyFiles 函数主要为创建这些数据，把这些数据写入文件
+//CreateCACertAndKeyFiles 函数主要为创建这些 caCert 数据并返回结构体，
 caCert, caKey, err := pkiutil.NewCertificateAuthority(certConfig)
 	if err != nil {
 		return err
@@ -193,6 +193,30 @@ return writeCertificateAuthorityFilesIfNotExist(
 		caCert,
 		caKey,
 	)
+
+// NewSelfSignedCACert creates a CA certificate
+func NewSelfSignedCACert(cfg Config, key crypto.Signer) (*x509.Certificate, error) {
+	now := time.Now()
+	tmpl := x509.Certificate{
+		SerialNumber: new(big.Int).SetInt64(0),
+		Subject: pkix.Name{
+			CommonName:   cfg.CommonName,
+			Organization: cfg.Organization,
+		},
+		DNSNames:              []string{cfg.CommonName},
+		NotBefore:             now.UTC(),
+		NotAfter:              now.Add(duration365d * 10).UTC(),  //此版本证书已经为10年了
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	certDERBytes, err := x509.CreateCertificate(cryptorand.Reader, &tmpl, &tmpl, key.Public(), key)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(certDERBytes)
+}
 
 先格式化 key 内容通过 x509
 // MarshalPrivateKeyToPEM converts a known private key type of RSA or ECDSA to
