@@ -1,6 +1,6 @@
-# NewCertsPhase 平面分析
-###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewKubeConfigPhase平面主要工作是通过证书文件创建带上下文的启动配置文件
+# NewKubeConfigPhase 平面分析
+###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go
+##### NewKubeConfigPhase 平面主要工作是通过证书文件创建带上下文的配置文件
 
 ##### 1、KubeConfig 平面涉及子平面，runKubeConfig 函数负责 Print 提示，主要创建任务还是在子平面里
 ```

@@ -1,6 +1,6 @@
 # NewPreflightPhase 平面分析
-###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewPreflighPhase平面主要工作是检查环境
+###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go
+##### NewPreflighPhase 平面主要工作是检查环境、pull 镜像
 
 ##### 1、Preflight 平面没有涉及子平面，运行内容全在 runPreflight 函数中
 ```

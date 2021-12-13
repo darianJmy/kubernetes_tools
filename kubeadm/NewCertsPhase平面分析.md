@@ -1,6 +1,6 @@
 # NewCertsPhase 平面分析
-###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewCertsPhase平面主要工作是生成证书
+###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go
+##### NewCertsPhase 平面主要工作是生成证书
 
 ##### 1、Certs 平面涉及子平面，runCerts 函数负责 Print 提示，主要创建任务还是在子平面里
 ```

@@ -1,6 +1,6 @@
-# NewCertsPhase 平面分析
-###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewKubeletStartPhase平面主要工作是创建kubelet启动的config文件与环境变量文件
+# NewKubeletStartPhase 平面分析
+###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go
+##### NewKubeletStartPhase平面主要工作是关闭 kubelet、创建 config.yaml 与 kubeadm-flags.env 到 /var/lib/kubelet 下、启动 kubelet
 
 ##### 1、KubeletStart 平面不涉及子平面，runKubeletStart 函数负责 Print 提示与创建任务
 ```
@@ -39,7 +39,7 @@ return workflow.Phase{
 		return errors.Wrap(err, "error writing a dynamic environment file for the kubelet")
 	}
 
-	//这边初通过把 &data.Cfg().ClusterConfiguration 值写入 config.yaml 文件中
+	//这边通过把 &data.Cfg().ClusterConfiguration 值写入 config.yaml 文件中
 	// Write the kubelet configuration file to disk.
 	if err := kubeletphase.WriteConfigToDisk(&data.Cfg().ClusterConfiguration, data.KubeletDir()); err != nil {
 		return errors.Wrap(err, "error writing kubelet configuration to disk")
