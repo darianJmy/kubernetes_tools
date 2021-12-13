@@ -1,6 +1,6 @@
 # NewCertsPhase 平面分析
 ###### 分析版本为1.22，代码入口 cmd/kubeadm/app/cmd/init.go 建议先看看cobra
-##### NewKubeConfigPhase平面主要工作是创建静态二进制文件
+##### NewKubeConfigPhase平面主要工作是通过证书文件创建带上下文的启动配置文件
 
 ##### 1、KubeConfig 平面涉及子平面，runKubeConfig 函数负责 Print 提示，主要创建任务还是在子平面里
 ```
@@ -25,7 +25,7 @@ return workflow.Phase{
 	}
 ```
 
-##### 2、runKubeConfig 函数会 print 一些数据作为创建静态文件的提示，执行kubeconfig平面内容后会执行子平面内容
+##### 2、runKubeConfig 函数会 print 一些数据作为创建文件的提示，执行kubeconfig平面内容后会执行子平面内容
 ```
 fmt.Printf("[kubeconfig] Using kubeconfig folder %q\n", data.KubeConfigDir())
 	return nil
