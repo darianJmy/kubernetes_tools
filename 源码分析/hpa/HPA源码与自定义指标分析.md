@@ -914,7 +914,7 @@ data:
   config.yaml: |
     rules:
     //更具格式照抄一个自定义指标
-    //demo_app_button_clicks_total， metrics url 必须能查到
+    //http_requests_total， metrics url 必须能查到
     - seriesQuery: 'http_requests_total{kubernetes_namespace!="",kubernetes_pod_name!=""}'
       resources:
         overrides:
@@ -922,7 +922,7 @@ data:
           kubernetes_pod_name: {resource: "pod"}
       name:
         matches: "^(.*)_total"
-        //自定义指标最终效果 http_requests_jixingxing
+        //自定义指标最终效果 test_jixingxing
         as: "test_jixingxing"
       //计算2分钟内 http_requests_total 访问量
       //详细信息访问社区 doc
