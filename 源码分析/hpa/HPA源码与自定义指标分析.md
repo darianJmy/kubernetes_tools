@@ -203,7 +203,7 @@ Events:
   ----    ------             ----  ----                       -------
   Normal  SuccessfulRescale  2m    horizontal-pod-autoscaler  New size: 3; reason: pods metric http_requests above target
 ```
-#### 上面通过实际操作知道 hpa 如何使用，现在分析源码
+#### 上面通过实际操作知道 hpa 如何使用，现在分析源码，源代码版本 1.23.1
 ##### 初始化
 ````
 //文件位置:cmd/kube-controller-manager/app/controllermanager.go
