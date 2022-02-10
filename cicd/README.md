@@ -27,8 +27,8 @@ $ helm install harbor bitnami/harbor --set service.nodePorts=30001 -set  global.
 $ echo Username: "admin"
 $ echo Password: $(kubectl get secret --namespace default harbor-core-envvars -o jsonpath="{.data.HARBOR_ADMIN_PASSWORD}" | base64 --decode)
 ```
-- jenkins 动态 slaver 模式
+- jenkins 配置与动态 slaver
 ```
 # jenkins 部署在 kubernetes 中，构建流水线时可以到插件管理处安装所需插件，但是还有一种方式是通过 master + slaver 模式运行，构建时会启动一个 slaver pod，所有构建任务在 slaver pod 里进行
-# 
+# ![Aaron Swartz](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-01-unlock.png)
 ```
