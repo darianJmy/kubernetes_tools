@@ -1,0 +1,9 @@
+image:
+  repository: 10.10.33.34:30001/library/helloworld
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart version.
+  tag: "8a25595"
+
+service:
+  type: ClusterIP
+  port: 80
