@@ -35,7 +35,7 @@ $ echo Password: $(kubectl get secret --namespace default harbor-core-envvars -o
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-01-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-02-unlock.png)
 ```
-# jenkins 进入页面，选择 系统管理->插件管理->可选插件，安装 kubernetes、gitlab，一个是让 jenkins 可以通过 kubernetes 集群创建动态 slaver、创建项目后通过 webhook 构建项目，安装完插件重启 jenkins 服务
+# jenkins 进入页面，选择 系统管理->插件管理->可选插件，安装 kubernetes、gitlab，一个是让 jenkins 可以通过 kubernetes 集群创建动态 slaver、一个是创建项目后通过 webhook 构建项目，安装完插件重启 jenkins 服务
 ```
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-03-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-04-unlock.png)
@@ -49,7 +49,7 @@ $ echo Password: $(kubectl get secret --namespace default harbor-core-envvars -o
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-09-unlock.png)
 ```
 # 集群名称随便填写，集群地址选择 https://kubernetes.default.svc.cluster.local，命名空间 default，jenkins 地址填写 http://jenkins.default.svc.cluster.local:8080，
-# jenkins 通道填写 jenkins.default.svc.cluster.local:50000，给 pod 取一个名字，命名空间，标签列表可以随便写但是创建项目时如果用到 slaver pod 与此处标签对应，
+# jenkins 通道填写 jenkins.default.svc.cluster.local:50000，给 pod 取一个名字，命名空间 default，标签列表可以随便写但是创建项目时如果用到 slaver pod 要与此处标签对应，
 # 容器取名、选择 slaver 镜像、工作目录 /home/jenkins/agent、添加卷选择 hostpath 把 docker、.kube 二进制文件传入使 slaver pod 里可以使用 docker 命令
 # ServiceAccount 选择 jenkins，此处已在 jenkins.yaml 里编写过，填写后保存
 ```
@@ -83,16 +83,16 @@ $ kubectl get pods
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-24-unlock.png)
 - jenkins + gitlab 通过钩子自动触发构建任务
 ```
-# jenkins 创建 pipline-webhook 流水线项目，构建触发器选择 Build when a change is pushed to GitLab，动作选择 Push Events，高级里生成 Secret token，流水线选择 Pipeline script from SCM，SCM 选择 git，添加 git 项目地址，添加密钥，选择分支，脚本路径选择 Jenkinsfile，这需要 代码库里有 pipline 脚本
+# jenkins 创建 pipline-webhook 流水线项目，构建触发器选择 Build when a change is pushed to GitLab，动作选择 Push Events，高级里生成 Secret token，流水线选择 Pipeline script from SCM，SCM 选择 git，添加 git 项目地址，添加密钥，选择分支，脚本路径选择 Jenkinsfile，这需要 代码库里有 Jenkinsfile 脚本
 ```
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-25-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-26-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-27-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-28-unlock.png)
+```
+# 把 jenkins 项目中触发器那边的 URL 与 Secret token 复制到 gitlab webhook 中，先开启 gitlab 运行 webhook 的一个前置条件后保存，进去代码库后选择 Settings->Webhook 填入 URL 与 Secret token，动作选择 Push Event，保存后选择 test 测试，返回 200 代表webhook 配置成功，同时会触发 jenkins 进行自动构建
+```
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-29-unlock.png)
-```
-# 把 jenkins 项目中触发器那边的 URL 与 Secret token 复制到 gitlab webhook 中，先开启 gitlab 运行 webhook 的一个前置条件，webhook 填入 URL 与 Secret token，动作选择 Push Event，保存后选择 test 测试，返回 200 代表webhook 配置成功，同时会触发 jenkins 进行自动构建
-```
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-30-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-31-unlock.png)
 ![avatar](https://github.com/darianJmy/kubernetes_tools/blob/main/cicd/Photos/setup-jenkins-32-unlock.png)
