@@ -390,11 +390,13 @@ func (cgc *containerGC) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourc
 	}
 
 	// Remove sandboxes with zero containers
+	// 这边执行驱逐 sandboxes 容器函数
 	if err := cgc.evictSandboxes(evictNonDeletedPods); err != nil {
 		errors = append(errors, err)
 	}
 
 	// Remove pod sandbox log directory
+	// 执行删除 pod log 文件
 	if err := cgc.evictPodLogsDirectories(allSourcesReady); err != nil {
 		errors = append(errors, err)
 	}
@@ -410,41 +412,66 @@ func (cgc *containerGC) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourc
 func (cgc *containerGC) evictContainers(gcPolicy kubecontainer.GCPolicy, allSourcesReady bool, evictNonDeletedPods bool) error {
 	// Separate containers by evict units.
     // gcPolicy.MinAge 默认 0s
-    // 获取字典，状态非 run，创建时间小于现在时间
+    // 获取字典，状态非 1，创建时间小于现在时间
 	evictUnits, err := cgc.evictableContainers(gcPolicy.MinAge)
 	if err != nil {
 		return err
 	}
 
+	//该函数有 3 个 驱逐的方法，分别是：
+	//移除所有状态是 IsEvicted 或 (IsDeleted 与 IsTerminated 的容器，
+	//移除 pod 里容器最多的容器
+	//移除所有可以移除的函数
+	
 	// Remove deleted pod containers if all sources are ready.
     //判断是否执行 remove
+	//默认是 true，如果这边是 true，下面两个移除被驱逐的容器方法实际上不产生任何效果
 	if allSourcesReady {
+		// evictUnits 是一个 map， key 唯一的，但是 unit是一个数组，可以有多个容器
 		for key, unit := range evictUnits {
-            //执行 remove
+            //判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated)
+			//此处是 或 计算，只要一个计算为 true 就生效
+			// cgc.podStateProvider.ShouldPodContentBeRemoved(key.uid) 是计算状态是不是 IsEvicted 或 (IsDeleted 与 IsTerminated)，如果是返回 bool 值
+			// evictNonDeletedPods 默认是 false，所以 cgc.podStateProvider.ShouldPodRuntimeBeRemoved(key.uid) 可以不看，因为与计算已经有 false 了
+			// 因为是 或 计算，所以 true 或 false 继续执行 removeOldestN 函数
+			//执行删除函数
 			if cgc.podStateProvider.ShouldPodContentBeRemoved(key.uid) || (evictNonDeletedPods && cgc.podStateProvider.ShouldPodRuntimeBeRemoved(key.uid)) {
+				// unit 是一个数组，len(unit) 计算 pod 下面有几个容器
 				cgc.removeOldestN(unit, len(unit)) // Remove all.
+				//删除字典里 key
 				delete(evictUnits, key)
 			}
 		}
 	}
 
-    // 判断是需要驱逐
+    // 判断 MaxPerPodContainer 是否大于等于 0
+	// 驱逐每个 pod 里容器 > MaxPerPodContainer 的 Pod
 	// Enforce max containers per evict unit.
+	// 默认是为 1，但是上面已经执行过删除函数并且 delete 字典里面 key 了，
+	// 所以此处的字典 evictUnits 应为空，所以 enforceMaxContainersPerEvictUnit 函数执行了个空
 	if gcPolicy.MaxPerPodContainer >= 0 {
 		cgc.enforceMaxContainersPerEvictUnit(evictUnits, gcPolicy.MaxPerPodContainer)
 	}
 
 	// Enforce max total number of containers.
+	// 判断 MaxContainers 是否大于等于 0 与 evictUnits 里 key 的数量大于 MaxContainers
+	// MaxContainers 为 -1，就是没有限额，此处是与函数，判断了 MaxContainers 是否大于等于 0 与 是否 字典里 key 的数量。 len(evictUnits[key])
+	// 这里一般是不执行的，因为 if 语句有 false
 	if gcPolicy.MaxContainers >= 0 && evictUnits.NumContainers() > gcPolicy.MaxContainers {
 		// Leave an equal number of containers per evict unit (min: 1).
+		// 如果判断为 true，执行 if 里面内容
+		// 如果 evictUnits 里 key 的数量为 9，MaxContainers 为 1，就是说还要删除 8 个 container
 		numContainersPerEvictUnit := gcPolicy.MaxContainers / evictUnits.NumEvictUnits()
 		if numContainersPerEvictUnit < 1 {
 			numContainersPerEvictUnit = 1
 		}
+		// 执行了 remove 函数，9 - 1 = 8 还要删除 8 个
 		cgc.enforceMaxContainersPerEvictUnit(evictUnits, numContainersPerEvictUnit)
 
 		// If we still need to evict, evict oldest first.
+		// 计算还有多少个容器
 		numContainers := evictUnits.NumContainers()
+		如果还大于 MaxContainers，就删除最旧的
 		if numContainers > gcPolicy.MaxContainers {
 			flattened := make([]containerGCInfo, 0, numContainers)
 			for key := range evictUnits {
@@ -460,7 +487,7 @@ func (cgc *containerGC) evictContainers(gcPolicy kubecontainer.GCPolicy, allSour
 
 // 获取驱逐容器列表
 func (cgc *containerGC) evictableContainers(minAge time.Duration) (containersByEvictUnit, error) {
-    //getKubeletContainers 获取一个数组，
+    //getKubeletContainers 获取一个数组
 	containers, err := cgc.manager.getKubeletContainers(true)
 	if err != nil {
 		return containersByEvictUnit{}, err
@@ -538,33 +565,29 @@ func (cgc *containerGC) enforceMaxContainersPerEvictUnit(evictUnits containersBy
 	}
 }
 
-
-
-
-
-
-
-
-
-
+// 容器删除了后，删除沙箱
 //驱逐Sandbox
 func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
+	//getKubeletContainers 获取 Containers 数组
 	containers, err := cgc.manager.getKubeletContainers(true)
 	if err != nil {
 		return err
 	}
-
+	//getKubeletSandboxes 获取 Sandboxes 数组
 	sandboxes, err := cgc.manager.getKubeletSandboxes(true)
 	if err != nil {
 		return err
 	}
 
+	//定义一个 map
 	// collect all the PodSandboxId of container
 	sandboxIDs := sets.NewString()
 	for _, container := range containers {
+		//一直写入 containers 的 PodSandboxId
 		sandboxIDs.Insert(container.PodSandboxId)
 	}
 
+	//定义一个 map
 	sandboxesByPod := make(sandboxesByPodUID)
 	for _, sandbox := range sandboxes {
 		podUID := types.UID(sandbox.Metadata.Uid)
@@ -579,14 +602,19 @@ func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
 		}
 
 		// Set sandboxes that still have containers to be active.
+		//container数组里 sandbox.Id 与 sandbox 数组里 sandbox.Id 相同，设置为 true，存活状态
 		if sandboxIDs.Has(sandbox.Id) {
 			sandboxInfo.active = true
 		}
-
+		//给 sandboxesByPod 结构体加值
 		sandboxesByPod[podUID] = append(sandboxesByPod[podUID], sandboxInfo)
 	}
 
 	for podUID, sandboxes := range sandboxesByPod {
+		//判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated) 或 evictNonDeletedPods == false 与 
+		//判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated)
+		//如果为 true 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)，
+		//如果为 false 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)-1
 		if cgc.podStateProvider.ShouldPodContentBeRemoved(podUID) || (evictNonDeletedPods && cgc.podStateProvider.ShouldPodRuntimeBeRemoved(podUID)) {
 			// Remove all evictable sandboxes if the pod has been removed.
 			// Note that the latest dead sandbox is also removed if there is
@@ -594,11 +622,35 @@ func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
 			cgc.removeOldestNSandboxes(sandboxes, len(sandboxes))
 		} else {
 			// Keep latest one if the pod still exists.
+			//保留，因为 len(sandboxes)-1 为 0
 			cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)-1)
 		}
 	}
 	return nil
 }
+
+// 获取 Sandboxes 数组的函数
+func (m *kubeGenericRuntimeManager) getKubeletSandboxes(all bool) ([]*runtimeapi.PodSandbox, error) {
+	var filter *runtimeapi.PodSandboxFilter
+	//函数传参为 true
+	if !all {
+		readyState := runtimeapi.PodSandboxState_SANDBOX_READY
+		filter = &runtimeapi.PodSandboxFilter{
+			State: &runtimeapi.PodSandboxStateValue{
+				State: readyState,
+			},
+		}
+	}
+	// 获取所有 sandbox 数组
+	resp, err := m.runtimeService.ListPodSandbox(filter)
+	if err != nil {
+		klog.ErrorS(err, "Failed to list pod sandboxes")
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 
 // 驱逐LogsDir
 func (cgc *containerGC) evictPodLogsDirectories(allSourcesReady bool) error {
