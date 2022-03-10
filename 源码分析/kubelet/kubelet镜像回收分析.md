@@ -27,12 +27,12 @@ kubelet 中镜像回收过程如下: 当容器镜像挂载点文件系统的磁�
 ```
 func NewKubeletCommand() *cobra.Command {
 	...
-    //这边初始化了两个结构体一个是 kubeletFlags，一个是 kubeletConfig
-    //设置了一些默认值，这边主要分析 GC 代码，需要的参数为：
+
+    // 这边初始化了两个结构体一个是 kubeletFlags，一个是 kubeletConfig
+    // kubeletFlags 设置了一些默认值，这边主要分析 GC 代码，需要的参数为：
     //  MaxContainerCount:       -1,
 	//	MaxPerPodContainerCount: 1,
 	//	MinimumGCAge:            metav1.Duration{Duration: 0},
-
 	kubeletFlags := options.NewKubeletFlags()
 	kubeletConfig, err := options.NewKubeletConfiguration()
 	...
@@ -42,22 +42,26 @@ func NewKubeletCommand() *cobra.Command {
 		...
 		Run: func(cmd *cobra.Command, args []string) {
 			// initial flag parse, since we disable cobra's flag parsing
-			//解析参数。
+			// 解析参数，因为下面有 AddFlags 函数可以添加参数。
+			// 这边解析的参数在一个数组里面。
 			if err := cleanFlagSet.Parse(args); err != nil {
 				...
 			}
-            ...
-            //此处的 kubeletServer 结构体被实例化， kubeletFlags 结构体也被传给 kubeletServer。
+			...
+
+            // 此处的 kubeletServer 结构体被实例化， kubeletFlags 结构体也被传给 kubeletServer。
 			// construct a KubeletServer from kubeletFlags and kubeletConfig
 			kubeletServer := &options.KubeletServer{
 				KubeletFlags:         *kubeletFlags,
 				KubeletConfiguration: *kubeletConfig,
 			}
+
 			// use kubeletServer to construct the default KubeletDeps
 			//通过 kubeletServer 构造默认的 kubeletDeps。
 			kubeletDeps, err := UnsecuredDependencies(kubeletServer, utilfeature.DefaultFeatureGate)
 			...
-            //这边执行了 Run 函数，启动 kubelet 服务。
+
+            //执行了 Run 函数，完成一系列的初始化任务后，启动 kubelet 服务。
 			// run the kubelet
 			if err := Run(ctx, kubeletServer, kubeletDeps, utilfeature.DefaultFeatureGate); err != nil {
 				klog.ErrorS(err, "Failed to run kubelet")
@@ -72,6 +76,7 @@ func NewKubeletCommand() *cobra.Command {
 	options.AddGlobalFlags(cleanFlagSet)
 	cleanFlagSet.BoolP("help", "h", false, fmt.Sprintf("help for %s", cmd.Name()))
     ...
+
 	return cmd
 }
 ```
@@ -82,16 +87,18 @@ func NewKubeletCommand() *cobra.Command {
 // 这个 Run 函数里执行了 run 函数。
 func Run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate featuregate.FeatureGate) error {
     ...
+
     if err := run(ctx, s, kubeDeps, featureGate); err != nil {
 		return fmt.Errorf("failed to run Kubelet: %w", err)
 	}
     ...
 }
 
-// run 函数里执行了 RunKubelet 函数
+// run 函数里执行了 RunKubelet 函数。
 func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate featuregate.FeatureGate) (err error) {
     //在 RunKubelet 函数之上，是一些完善 s 结构体与初始化的操作。
     ...
+
     if err := RunKubelet(s, kubeDeps, s.RunOnce); err != nil {
 		return err
 	}
@@ -103,6 +110,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencies, runOnce bool) error {
     //
     ...
+
     k, err := createAndInitKubelet(&kubeServer.KubeletConfiguration,
 		kubeDeps,
 		&kubeServer.ContainerRuntimeOptions,
@@ -139,7 +147,8 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 	}
     //执行启动服务，执行活检。
     ...
-    //最后执行死循环判断管道信号，保持服务一直运行。
+
+    //执行死循环判断管道信号，保持服务一直运行。
 }
 
 // createAndInitKubelet 接受传参后，执行 kubelet 包的 NewMainKubelet 函数，初始化结构体。
@@ -175,7 +184,7 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	nodeStatusMaxImages int32,
 	seccompDefault bool,
 ) (k kubelet.Bootstrap, err error) {
-    // NewMainKubelet 函数实例化了很多东西，包括 GC 要用到的参数，实例化了 SVC、POD等 Informer，
+    // NewMainKubelet 函数实例化了很多东西，包括 GC 要用到的参数，实例化了一些 Informer。
     k, err = kubelet.NewMainKubelet(kubeCfg,
 		kubeDeps,
 		crOptions,
@@ -212,13 +221,14 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	k.BirthCry()
-    //执行启动 GC 函数
+
+    //执行启动 GC 函数。
 	k.StartGarbageCollection()
 
 	return k, nil
 }
 
-// NewMainKubelet 函数主要作用就是实例化
+// NewMainKubelet 函数主要作用就是实例化。
 func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	kubeDeps *Dependencies,
 	crOptions *config.ContainerRuntimeOptions,
@@ -251,22 +261,23 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	seccompDefault bool,
 ) (*Kubelet, error) {
 	...
-	//实例化了 containerGCPolicy
+
+	//实例化了 containerGCPolicy 结构体。
 	containerGCPolicy := kubecontainer.GCPolicy{
 		MinAge:             minimumGCAge.Duration,
 		MaxPerPodContainer: int(maxPerPodContainerCount),
 		MaxContainers:      int(maxContainerCount),
 	}
-    //实例化了 imageGCPolicy
+    //实例化了 imageGCPolicy。
 	imageGCPolicy := images.ImageGCPolicy{
 		MinAge:               kubeCfg.ImageMinimumGCAge.Duration,
 		HighThresholdPercent: int(kubeCfg.ImageGCHighThresholdPercent),
 		LowThresholdPercent:  int(kubeCfg.ImageGCLowThresholdPercent),
 	}
     ...
-    //实例化了 serviceLister Informer
-    //以便后续 GC 函数使用 Informer 获取数据
-    //这里是举例，还有containerLister等等 Informer
+
+    //实例化了 serviceLister Informer，
+    //这里只是举例，还有其他 Informer。
 	var serviceLister corelisters.ServiceLister
 	var serviceHasSynced cache.InformerSynced
 	if kubeDeps.KubeClient != nil {
@@ -280,16 +291,18 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		serviceHasSynced = func() bool { return true }
 	}
     ...
+
 	klet := &Kubelet{
 		...
-        // sourcesReady 是一个接口
+
+        // sourcesReady 是一个结构体。
 		sourcesReady:                            config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
 		...
 	}
     ...
+
 	// setup containerGC
-    // GC 代码部分用到
-    // containerGC 是一个结构体
+    // GC 代码部分用到，containerGC 是一个结构体。
 	containerGC, err := kubecontainer.NewContainerGC(klet.containerRuntime, containerGCPolicy, klet.sourcesReady)
 	if err != nil {
 		return nil, err
@@ -310,10 +323,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 ### Kubelet GC 部分源码分析
 
 ```
-// StartGarbageCollection 为 kubelet包里 Bootstrap 的方法
-// 这边启动了携程 go wait.Until(func(){}, ContainerGCPeriod, wait.NeverStop)
-// func(){} 是具体任务， ContainerGCPeriod 是每个多少时间循环一次， wait.NeverStop 是 channel
-// kl 结构体已经被实例化了，这边执行 kl.containerGC.GarbageCollect() 函数
+// StartGarbageCollection 为 kubelet包里 Bootstrap 的方法，
+// 这边启动了携程 go wait.Until(func(){}, ContainerGCPeriod, wait.NeverStop)，
+// func(){} 是具体任务， ContainerGCPeriod 是每个多少时间循环一次， wait.NeverStop 是 channel，
+// kl 结构体已经被实例化了，这边执行 kl.containerGC.GarbageCollect() 函数。
 // StartGarbageCollection starts garbage collection threads.
 func (kl *Kubelet) StartGarbageCollection() {
 	loggedContainerGCFailure := false
@@ -321,8 +334,9 @@ func (kl *Kubelet) StartGarbageCollection() {
 	go wait.Until(func() {
         //每个1分钟执行一次
 		//处理containerGC
-        //containerGC.GarbageCollect，相当于 GarbageCollect 可读取 containerGC 结构体数据
+        //containerGC.GarbageCollect用法是，GarbageCollect 函数可读取 containerGC 结构体数据
 		if err := kl.containerGC.GarbageCollect(); err != nil {
+			//如果有 error，log 输出，event 输出
 			klog.ErrorS(err, "Container garbage collection failed")
 			kl.recorder.Eventf(kl.nodeRef, v1.EventTypeWarning, events.ContainerGCFailed, err.Error())
 			loggedContainerGCFailure = true
@@ -332,7 +346,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 				vLevel = 1
 				loggedContainerGCFailure = false
 			}
-			//如果没有报错,log等级为1
+			//如果没有报错,log等级为1。
 			klog.V(vLevel).InfoS("Container garbage collection succeeded")
 		}
 	}, ContainerGCPeriod, wait.NeverStop)
@@ -345,7 +359,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 
 	prevImageGCFailed := false
 	go wait.Until(func() {
-		//处理imageGC
+		//处理imageGC。
 		if err := kl.imageManager.GarbageCollect(); err != nil {
 			if prevImageGCFailed {
 				klog.ErrorS(err, "Image garbage collection failed multiple times in a row")
@@ -367,36 +381,36 @@ func (kl *Kubelet) StartGarbageCollection() {
 	}, ImageGCPeriod, wait.NeverStop)
 }
 
-// container_gc 包里 GC 接口的 GarbageCollect 方法，执行的是 runtime 包里的 GarbageCollect 方法
+// container_gc 包里 GC 接口的 GarbageCollect 方法，执行的是 runtime 包里的 GarbageCollect 方法。
 func (cgc *realContainerGC) GarbageCollect() error {
 	return cgc.runtime.GarbageCollect(cgc.policy, cgc.sourcesReadyProvider.AllReady(), false)
 }
 
-// runtime 包里的 GarbageCollect 方法， 执行的是 kuberuntime 包里 kubeGenericRuntimeManager 接口下的 GarbageCollect 方法
+// runtime 包里的 GarbageCollect 方法， 执行的是 kuberuntime 包里 kubeGenericRuntimeManager 接口下的 GarbageCollect 方法。
 func (m *kubeGenericRuntimeManager) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourcesReady bool, evictNonDeletedPods bool) error {
 	return m.containerGC.GarbageCollect(gcPolicy, allSourcesReady, evictNonDeletedPods)
 }
 
 // GarbageCollect 函数里先定义了一个数组，
-// 然后执行了 evictContainers 函数判断返回值，函数里执行了 removeContainers 函数
-// 然后执行 evictSandboxes 函数判断返回值，函数里执行了 removeSandboxes 函数
-// 然后执行 evictPodLogsDirectories 函数判断返回值, 函数里执行了 PodLogsDirectorie 函数
+// 然后执行了 evictContainers 函数判断返回值，函数里执行了 removeContainers 函数，
+// 然后执行 evictSandboxes 函数判断返回值，函数里执行了 removeSandboxes 函数，
+// 然后执行 evictPodLogsDirectories 函数判断返回值, 函数里执行了 PodLogsDirectorie 函数。
 func (cgc *containerGC) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourcesReady bool, evictNonDeletedPods bool) error {
 	errors := []error{}
 	// Remove evictable containers
-    // 这边执行驱逐容器函数
+    // 这边执行驱逐容器函数。
 	if err := cgc.evictContainers(gcPolicy, allSourcesReady, evictNonDeletedPods); err != nil {
 		errors = append(errors, err)
 	}
 
 	// Remove sandboxes with zero containers
-	// 这边执行驱逐 sandboxes 容器函数
+	// 这边执行驱逐 sandboxes 容器函数。
 	if err := cgc.evictSandboxes(evictNonDeletedPods); err != nil {
 		errors = append(errors, err)
 	}
 
 	// Remove pod sandbox log directory
-	// 执行删除 pod log 文件
+	// 执行删除 pod log 文件。
 	if err := cgc.evictPodLogsDirectories(allSourcesReady); err != nil {
 		errors = append(errors, err)
 	}
@@ -407,8 +421,11 @@ func (cgc *containerGC) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourc
 ### Kubelet 驱逐容器部分源码分析
 
 ```
-// 驱逐容器函数
+// 驱逐容器函数。
 // evict all containers that are evictable
+// gcPolicy 是一个结构体，数据有： MinAge 默认是 0s， MaxPerPodContainer 默认是 1，	MaxContainers 默认是 -1。
+// allSourcesReady 布尔值是获取的 cgc.sourcesReadyProvider.AllReady()， AllReady() 函数默认是 true，
+// evictNonDeletedPods 布尔值直接就是 false。
 func (cgc *containerGC) evictContainers(gcPolicy kubecontainer.GCPolicy, allSourcesReady bool, evictNonDeletedPods bool) error {
 	// Separate containers by evict units.
     // gcPolicy.MinAge 默认 0s
@@ -417,55 +434,50 @@ func (cgc *containerGC) evictContainers(gcPolicy kubecontainer.GCPolicy, allSour
 	if err != nil {
 		return err
 	}
-
-	//该函数有 3 个 驱逐的方法，分别是：
-	//移除所有状态是 IsEvicted 或 (IsDeleted 与 IsTerminated 的容器，
-	//移除 pod 里容器最多的容器
-	//移除所有可以移除的函数
 	
 	// Remove deleted pod containers if all sources are ready.
     //判断是否执行 remove
-	//默认是 true，如果这边是 true，下面两个移除被驱逐的容器方法实际上不产生任何效果
+	//默认是 true，如果这边是 true，下面两个移除被驱逐的容器方法实际上不产生任何效果，因为 delete 后字典为空
 	if allSourcesReady {
 		// evictUnits 是一个 map， key 唯一的，但是 unit是一个数组，可以有多个容器
 		for key, unit := range evictUnits {
-            //判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated)
-			//此处是 或 计算，只要一个计算为 true 就生效
-			// cgc.podStateProvider.ShouldPodContentBeRemoved(key.uid) 是计算状态是不是 IsEvicted 或 (IsDeleted 与 IsTerminated)，如果是返回 bool 值
-			// evictNonDeletedPods 默认是 false，所以 cgc.podStateProvider.ShouldPodRuntimeBeRemoved(key.uid) 可以不看，因为与计算已经有 false 了
-			// 因为是 或 计算，所以 true 或 false 继续执行 removeOldestN 函数
-			//执行删除函数
+
+            // 判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated)，执行删除命令
+			// evictNonDeletedPods 默认是 false，只判断状态是 IsEvicted 或 (IsDeleted 与 IsTerminated) 就行
 			if cgc.podStateProvider.ShouldPodContentBeRemoved(key.uid) || (evictNonDeletedPods && cgc.podStateProvider.ShouldPodRuntimeBeRemoved(key.uid)) {
+				
 				// unit 是一个数组，len(unit) 计算 pod 下面有几个容器
+				// 删除所有container
 				cgc.removeOldestN(unit, len(unit)) // Remove all.
-				//删除字典里 key
+				//删除字典里 key，如果跟预期一样，evictUnits 字典应该为空
 				delete(evictUnits, key)
 			}
 		}
 	}
 
-    // 判断 MaxPerPodContainer 是否大于等于 0
-	// 驱逐每个 pod 里容器 > MaxPerPodContainer 的 Pod
-	// Enforce max containers per evict unit.
-	// 默认是为 1，但是上面已经执行过删除函数并且 delete 字典里面 key 了，
+    // 判断 MaxPerPodContainer 是否大于等于 0，默认值是 1。
 	// 所以此处的字典 evictUnits 应为空，所以 enforceMaxContainersPerEvictUnit 函数执行了个空
+	// 驱逐每个 pod 里容器 > MaxPerPodContainer 的 Pod
+	// 就是说如果 pod 里只有一个 容器不会被删除
+	// Enforce max containers per evict unit.
 	if gcPolicy.MaxPerPodContainer >= 0 {
 		cgc.enforceMaxContainersPerEvictUnit(evictUnits, gcPolicy.MaxPerPodContainer)
 	}
 
 	// Enforce max total number of containers.
 	// 判断 MaxContainers 是否大于等于 0 与 evictUnits 里 key 的数量大于 MaxContainers
-	// MaxContainers 为 -1，就是没有限额，此处是与函数，判断了 MaxContainers 是否大于等于 0 与 是否 字典里 key 的数量。 len(evictUnits[key])
-	// 这里一般是不执行的，因为 if 语句有 false
+	// MaxContainers 为 -1，就是没有限额，判断了 MaxContainers 是否大于等于 0 与 字典里 key 的数量是否大于 MaxContainers。 len(evictUnits[key])
+	// 这里一般是不执行的，因为 if 语句有 false，所有不执行删除任务
+	// 但是如果执行删除任务，逻辑跟 cgc.enforceMaxContainersPerEvictUnit(evictUnits, gcPolicy.MaxPerPodContainer) 一样
 	if gcPolicy.MaxContainers >= 0 && evictUnits.NumContainers() > gcPolicy.MaxContainers {
 		// Leave an equal number of containers per evict unit (min: 1).
 		// 如果判断为 true，执行 if 里面内容
-		// 如果 evictUnits 里 key 的数量为 9，MaxContainers 为 1，就是说还要删除 8 个 container
+		// 如果 evictUnits 里 pod 的 container 的数量为 9，MaxContainers 为 1，就是说还要删除 8 个 container
 		numContainersPerEvictUnit := gcPolicy.MaxContainers / evictUnits.NumEvictUnits()
 		if numContainersPerEvictUnit < 1 {
 			numContainersPerEvictUnit = 1
 		}
-		// 执行了 remove 函数，9 - 1 = 8 还要删除 8 个
+		// 执行了 remove 函数，9 - 1 = 8 还要删除 8 个 containers
 		cgc.enforceMaxContainersPerEvictUnit(evictUnits, numContainersPerEvictUnit)
 
 		// If we still need to evict, evict oldest first.
@@ -486,47 +498,59 @@ func (cgc *containerGC) evictContainers(gcPolicy kubecontainer.GCPolicy, allSour
 }
 
 // 获取驱逐容器列表
+// minAge 默认 0s。
+// 函数处理了过滤掉不是 k8s 的 container， 并且把 containers 组合成 key 为 pod 带数组，数组里面为多个 container 的字典，返回。
 func (cgc *containerGC) evictableContainers(minAge time.Duration) (containersByEvictUnit, error) {
-    //getKubeletContainers 获取一个数组
+    // getKubeletContainers 获取一个数组
+	// 这边是获取所有 containers 
 	containers, err := cgc.manager.getKubeletContainers(true)
 	if err != nil {
 		return containersByEvictUnit{}, err
 	}
     // make 一个字典
 	evictUnits := make(containersByEvictUnit)
-    //minAge 默认为 0s，
-    //newestGCTime == time.Now()
+    
+	// newestGCTime 是当前时间 - 退出容器时间，
+	// minAge 默认为 0s，
+	// 所以不考虑容器退出后再等多久，再删除。
+    // newestGCTime == time.Now()
 	newestGCTime := time.Now().Add(-minAge)
 
-    //循环获取container
+    // 循环获取container
 	for _, container := range containers {
 		// Prune out running containers.
         // 判断container.State 判断状态如果是 1 ，结束当前循环，再次执行循环
 		if container.State == runtimeapi.ContainerState_CONTAINER_RUNNING {
 			continue
 		}
-        //计算创建时间
+        // 计算创建时间
 		createdAt := time.Unix(0, container.CreatedAt)
-        /如果创建时间小于newestGCTime，结束当前循环，再次执行循环
+        / 如果创建时间小于当前时间 - 退出容器时间，结束当前循环，再次执行循环
 		if newestGCTime.Before(createdAt) {
 			continue
 		}
-        //获取标签的相关信息
+        // 获取标签信息
+		// getContainerInfoFromLabels函数里判断了是否带有 k8s 的标签，
+		// 如果带有 k8s 的标签，返回 value，如果不是 k8s 的标签返回 ""， 空
 		labeledInfo := getContainerInfoFromLabels(container.Labels)
 		containerInfo := containerGCInfo{
 			id:         container.Id,
 			name:       container.Metadata.Name,
 			createTime: createdAt,
+			//unknown 是布尔值，判断容器状态是不是 unknown
 			unknown:    container.State == runtimeapi.ContainerState_CONTAINER_UNKNOWN,
 		}
 		key := evictUnit{
 			uid:  labeledInfo.PodUID,
 			name: containerInfo.name,
 		}
-        //写到字典
+
+        // append 到字典，这个时候 key如果是重复的，会追加 containerInfo 到 key 里面，
+		// 如：map{ "pod1": ["container1", "contaner2"], "pod2": ["container3"]}
+		// 不带标签的 container 也追加到字典里了，但是 key 为 ""，空，所以执行与丢弃效果一样
 		evictUnits[key] = append(evictUnits[key], containerInfo)
 	}
-
+	// 返回字典
 	return evictUnits, nil
 }
 
@@ -534,14 +558,18 @@ func (cgc *containerGC) evictableContainers(minAge time.Duration) (containersByE
 func (m *kubeGenericRuntimeManager) getKubeletContainers(allContainers bool) ([]*runtimeapi.Container, error) {
     // new 一个结构体，但结构体没数据
 	filter := &runtimeapi.ContainerFilter{}
-    // allContainers 是一个 bool 值，但是 cgc.manager.getKubeletContainers(true) 使用 true 调用的，默认不执行 if 语句里面内容
+    // allContainers 是一个 bool 值，
+	// 但是 cgc.manager.getKubeletContainers(true) 使用 true 调用的，
+	// 默认不执行 if 语句里面内容，
+	// 如果是 false 就是获取状态是 1 的容器。
 	if !allContainers {
         //给结构体 State 值，runtimeapi.ContainerState_CONTAINER_RUNNING 默认为 1
 		filter.State = &runtimeapi.ContainerStateValue{
 			State: runtimeapi.ContainerState_CONTAINER_RUNNING,
 		}
 	}
-    //获取容器列表
+    //获取所有容器列表
+	//这边就是获取所有 containers ，调用方式不是获取 informer ，而是直接调用 grpc， 获取容器运行时接口的 api。
 	containers, err := m.runtimeService.ListContainers(filter)
 	if err != nil {
 		klog.ErrorS(err, "ListContainers failed")
@@ -551,14 +579,54 @@ func (m *kubeGenericRuntimeManager) getKubeletContainers(allContainers bool) ([]
 	return containers, nil
 }
 
-//判断最大可驱逐容器
+// removeOldestN removes the oldest toRemove containers and returns the resulting slice.
+// 执行删除函数
+func (cgc *containerGC) removeOldestN(containers []containerGCInfo, toRemove int) []containerGCInfo {
+	// Remove from oldest to newest (last to first).
+	// 删除全部 container 函数执行此删除函数，toRemove 就是 len(containers)，此处又计算了一遍 len(containers) - toRemove 值为 0，所以删除全部 container 函数不保留任何容器无需排序
+	// 删除保留部分container的函数执行此函数，
+	// 所以 numToKeep 一定等于 0
+	numToKeep := len(containers) - toRemove
+
+	if numToKeep > 0 {
+		sort.Sort(byCreated(containers))
+	}
+	// 从后往前读数据
+	for i := len(containers) - 1; i >= numToKeep; i-- {
+		// 如果 containers 状态是 unknown，执行 kill 函数再执行 remove 函数，防止直接 remove 删除不了
+		if containers[i].unknown {
+			// Containers in known state could be running, we should try
+			// to stop it before removal.
+			id := kubecontainer.ContainerID{
+				Type: cgc.manager.runtimeName,
+				ID:   containers[i].id,
+			}
+			message := "Container is in unknown state, try killing it before removal"
+			if err := cgc.manager.killContainer(nil, id, containers[i].name, message, reasonUnknown, nil); err != nil {
+				klog.ErrorS(err, "Failed to stop container", "containerID", containers[i].id)
+				continue
+			}
+		}
+		// 如果状态不是 unknown，执行 remove 函数
+		if err := cgc.manager.removeContainer(containers[i].id); err != nil {
+			klog.ErrorS(err, "Failed to remove container", "containerID", containers[i].id)
+		}
+	}
+
+	// Assume we removed the containers so that we're not too aggressive.
+	// 此处返回的一定是 containers[]，为空
+	return containers[:numToKeep]
+}
+
+// 判断 pod 里最大可驱逐容器
 // enforceMaxContainersPerEvictUnit enforces MaxPerPodContainer for each evictUnit.
 func (cgc *containerGC) enforceMaxContainersPerEvictUnit(evictUnits containersByEvictUnit, MaxContainers int) {
 	for key := range evictUnits {
-        //如果可驱逐的是 10， 那么就是 10 - 1， 可驱逐 9 个
+        // 如果可驱逐的container 是 10， 那么就是 10 - 1， 可驱逐 9 个
+		// 如果可驱逐的container 是 1， 那么就是 1 - 1， 可驱逐 0 个，containers 只有 1 个，不执行驱逐任务
 		toRemove := len(evictUnits[key]) - MaxContainers
 
-        // remove 容器，这边是按时间排序的
+        // remove 容器，这边是倒叙删除，返回的是字典里没删除值
 		if toRemove > 0 {
 			evictUnits[key] = cgc.removeOldestN(evictUnits[key], toRemove)
 		}
@@ -566,14 +634,15 @@ func (cgc *containerGC) enforceMaxContainersPerEvictUnit(evictUnits containersBy
 }
 
 // 容器删除了后，删除沙箱
-//驱逐Sandbox
+// 驱逐Sandbox
+// 如果删除容器函数生效，此处已经没有 Sandbox 可以删除了
 func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
-	//getKubeletContainers 获取 Containers 数组
+	// getKubeletContainers 获取所有 Containers 数组。
 	containers, err := cgc.manager.getKubeletContainers(true)
 	if err != nil {
 		return err
 	}
-	//getKubeletSandboxes 获取 Sandboxes 数组
+	//getKubeletSandboxes 获取所有 Sandboxes 数组
 	sandboxes, err := cgc.manager.getKubeletSandboxes(true)
 	if err != nil {
 		return err
@@ -589,6 +658,7 @@ func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
 
 	//定义一个 map
 	sandboxesByPod := make(sandboxesByPodUID)
+	//处理单个 sandbox
 	for _, sandbox := range sandboxes {
 		podUID := types.UID(sandbox.Metadata.Uid)
 		sandboxInfo := sandboxGCInfo{
@@ -597,24 +667,24 @@ func (cgc *containerGC) evictSandboxes(evictNonDeletedPods bool) error {
 		}
 
 		// Set ready sandboxes to be active.
+		// 如果 sandbox 的状态是 ready，sandboxInfo.active = true
 		if sandbox.State == runtimeapi.PodSandboxState_SANDBOX_READY {
 			sandboxInfo.active = true
 		}
 
 		// Set sandboxes that still have containers to be active.
-		//container数组里 sandbox.Id 与 sandbox 数组里 sandbox.Id 相同，设置为 true，存活状态
+		// container数组里 sandbox.Id 与 sandbox 数组里 sandbox.Id 相同，设置为 true，存活状态
 		if sandboxIDs.Has(sandbox.Id) {
 			sandboxInfo.active = true
 		}
-		//给 sandboxesByPod 结构体加值
+		//给 sandboxesByPod 结构体加值，此处 podUID 为 key，value 为数组，一个 podUID 可以有多个 sandboxInfo
 		sandboxesByPod[podUID] = append(sandboxesByPod[podUID], sandboxInfo)
 	}
 
 	for podUID, sandboxes := range sandboxesByPod {
-		//判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated) 或 evictNonDeletedPods == false 与 
-		//判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated)
-		//如果为 true 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)，
-		//如果为 false 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)-1
+		// 判断容器 status 状态，如果是 IsEvicted 或 (IsDeleted 与 IsTerminated) 与 evictNonDeletedPods 的布尔值
+		// 如果为 true 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)，删除所有 sandboxes
+		// 如果为 false 执行 cgc.removeOldestNSandboxes(sandboxes, len(sandboxes)-1，-1 就是为了保留每个 pod 一个 sandbox 存在
 		if cgc.podStateProvider.ShouldPodContentBeRemoved(podUID) || (evictNonDeletedPods && cgc.podStateProvider.ShouldPodRuntimeBeRemoved(podUID)) {
 			// Remove all evictable sandboxes if the pod has been removed.
 			// Note that the latest dead sandbox is also removed if there is
@@ -651,68 +721,63 @@ func (m *kubeGenericRuntimeManager) getKubeletSandboxes(all bool) ([]*runtimeapi
 	return resp, nil
 }
 
+// 删除 sandboxes 任务
+func (cgc *containerGC) removeOldestNSandboxes(sandboxes []sandboxGCInfo, toRemove int) {
+	//通过计算判断删除多少个 containers， 如果 2 - 2 就是一个不剩，如果 2-(2-1) 就是剩余 1 个
+	numToKeep := len(sandboxes) - toRemove
+	//如果剩余 1 个，就排序，判断哪个不删
+	if numToKeep > 0 {
+		sort.Sort(sandboxByCreated(sandboxes))
+	}
+	// Remove from oldest to newest (last to first).
+	//倒叙删除
+	for i := len(sandboxes) - 1; i >= numToKeep; i-- {
+		if !sandboxes[i].active {
+			cgc.removeSandbox(sandboxes[i].id)
+		}
+	}
+}
+
 
 // 驱逐LogsDir
 func (cgc *containerGC) evictPodLogsDirectories(allSourcesReady bool) error {
+	// 获取 os 方法
 	osInterface := cgc.manager.osInterface
+	// 跟删除所有 containers 逻辑一样
 	if allSourcesReady {
 		// Only remove pod logs directories when all sources are ready.
+		// 读取 /var/log/pods 目录
 		dirs, err := osInterface.ReadDir(podLogsRootDirectory)
 		if err != nil {
 			return fmt.Errorf("failed to read podLogsRootDirectory %q: %v", podLogsRootDirectory, err)
 		}
+		// 处理单个 dir
 		for _, dir := range dirs {
+			// 获取名字
 			name := dir.Name()
+			// 获取 UID， parsePodUIDFromLogsDirectory 函数处理了切片，获取最后一个 _ 以后的值
 			podUID := parsePodUIDFromLogsDirectory(name)
+			// 判断 pod 状态，如果 run，重新开始执行循环
 			if !cgc.podStateProvider.ShouldPodContentBeRemoved(podUID) {
 				continue
 			}
 			klog.V(4).InfoS("Removing pod logs", "podUID", podUID)
+			// 删除 log 文件
 			err := osInterface.RemoveAll(filepath.Join(podLogsRootDirectory, name))
 			if err != nil {
 				klog.ErrorS(err, "Failed to remove pod logs directory", "path", name)
 			}
 		}
 	}
-
-	// Remove dead container log symlinks.
-	// TODO(random-liu): Remove this after cluster logging supports CRI container log path.
-	logSymlinks, _ := osInterface.Glob(filepath.Join(legacyContainerLogsDir, fmt.Sprintf("*.%s", legacyLogSuffix)))
-	for _, logSymlink := range logSymlinks {
-		if _, err := osInterface.Stat(logSymlink); os.IsNotExist(err) {
-			if containerID, err := getContainerIDFromLegacyLogSymlink(logSymlink); err == nil {
-				status, err := cgc.manager.runtimeService.ContainerStatus(containerID)
-				if err != nil {
-					// TODO: we should handle container not found (i.e. container was deleted) case differently
-					// once https://github.com/kubernetes/kubernetes/issues/63336 is resolved
-					klog.InfoS("Error getting ContainerStatus for containerID", "containerID", containerID, "err", err)
-				} else if status.State != runtimeapi.ContainerState_CONTAINER_EXITED {
-					// Here is how container log rotation works (see containerLogManager#rotateLatestLog):
-					//
-					// 1. rename current log to rotated log file whose filename contains current timestamp (fmt.Sprintf("%s.%s", log, timestamp))
-					// 2. reopen the container log
-					// 3. if #2 fails, rename rotated log file back to container log
-					//
-					// There is small but indeterministic amount of time during which log file doesn't exist (between steps #1 and #2, between #1 and #3).
-					// Hence the symlink may be deemed unhealthy during that period.
-					// See https://github.com/kubernetes/kubernetes/issues/52172
-					//
-					// We only remove unhealthy symlink for dead containers
-					klog.V(5).InfoS("Container is still running, not removing symlink", "containerID", containerID, "path", logSymlink)
-					continue
-				}
-			} else {
-				klog.V(4).InfoS("Unable to obtain container ID", "err", err)
-			}
-			err := osInterface.Remove(logSymlink)
-			if err != nil {
-				klog.ErrorS(err, "Failed to remove container log dead symlink", "path", logSymlink)
-			} else {
-				klog.V(4).InfoS("Removed symlink", "path", logSymlink)
-			}
-		}
-	}
+	// 一些输出处理
+	...
 	return nil
 }
 ```
 
+### Kubelet 驱逐镜像部分源码分析
+
+
+```
+
+```
