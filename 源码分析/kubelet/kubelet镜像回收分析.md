@@ -380,7 +380,11 @@ func (kl *Kubelet) StartGarbageCollection() {
 		}
 	}, ImageGCPeriod, wait.NeverStop)
 }
+```
 
+### Kubelet 垃圾回收容器部分源码分析
+
+```
 // container_gc 包里 GC 接口的 GarbageCollect 方法，执行的是 runtime 包里的 GarbageCollect 方法。
 func (cgc *realContainerGC) GarbageCollect() error {
 	return cgc.runtime.GarbageCollect(cgc.policy, cgc.sourcesReadyProvider.AllReady(), false)
@@ -418,7 +422,7 @@ func (cgc *containerGC) GarbageCollect(gcPolicy kubecontainer.GCPolicy, allSourc
 }
 ```
 
-### Kubelet 驱逐容器部分源码分析
+### Kubelet 垃圾回收容器部分之删除容器源码分析
 
 ```
 // 驱逐容器函数。
@@ -632,7 +636,11 @@ func (cgc *containerGC) enforceMaxContainersPerEvictUnit(evictUnits containersBy
 		}
 	}
 }
+```
 
+### Kubelet 垃圾回收容器部分之删除 Sandbox 源码分析
+
+```
 // 容器删除了后，删除沙箱
 // 驱逐Sandbox
 // 如果删除容器函数生效，此处已经没有 Sandbox 可以删除了
@@ -737,8 +745,11 @@ func (cgc *containerGC) removeOldestNSandboxes(sandboxes []sandboxGCInfo, toRemo
 		}
 	}
 }
+```
 
+### Kubelet 垃圾回收容器部分之删除容器源码分析
 
+```
 // 驱逐LogsDir
 func (cgc *containerGC) evictPodLogsDirectories(allSourcesReady bool) error {
 	// 获取 os 方法
@@ -777,7 +788,393 @@ func (cgc *containerGC) evictPodLogsDirectories(allSourcesReady bool) error {
 
 ### Kubelet 驱逐镜像部分源码分析
 
-
 ```
+// 镜像部分GC
+func (im *realImageGCManager) GarbageCollect() error {
+	// Get disk usage on disk holding images.
+	// 获取 image filesystem 文件系统的一些信息，也有可能是 nil
+	// 所以下面判断 fsStats 是 nil 还是有数据的结构体
+	fsStats, err := im.statsProvider.ImageFsStats()
+	if err != nil {
+		return err
+	}
+	// 定义两个变量
+	var capacity, available int64
+	// 如果文件系统总量不为 nil，传值
+	if fsStats.CapacityBytes != nil {
+		capacity = int64(*fsStats.CapacityBytes)
+	}
+	// 如果文件系统可用量不为 nil，传值
+	if fsStats.AvailableBytes != nil {
+		available = int64(*fsStats.AvailableBytes)
+	}
 
+	// 可用量 > 总量，总量传给可用量，矫正数据
+	// 可用量不应该大于总量啊？
+	if available > capacity {
+		klog.InfoS("Availability is larger than capacity", "available", available, "capacity", capacity)
+		// 
+		available = capacity
+	}
+
+	// Check valid capacity.
+	// 总量为 0，返回erro，记录事件
+	if capacity == 0 {
+		err := goerrors.New("invalid capacity 0 on image filesystem")
+		im.recorder.Eventf(im.nodeRef, v1.EventTypeWarning, events.InvalidDiskCapacity, err.Error())
+		return err
+	}
+
+	// If over the max threshold, free enough to place us at the lower threshold.
+	// 计算使用的百分比，
+	// 如果 100 - （可用量 1 * 100 / 总量 10），百分比为 90
+	usagePercent := 100 - int(available*100/capacity)
+	// 如果百分比大于等于设置的文件系统最多百分比 85，就执行 GC 具体删除任务
+	if usagePercent >= im.policy.HighThresholdPercent {
+		// 判断超出多少
+		// 如果 10 * （100-80）/ 100 - 1，amountToFree 就是 1 ，就是超出 百分之 1
+		amountToFree := capacity*int64(100-im.policy.LowThresholdPercent)/100 - available
+		klog.InfoS("Disk usage on image filesystem is over the high threshold, trying to free bytes down to the low threshold", "usage", usagePercent, "highThreshold", im.policy.HighThresholdPercent, "amountToFree", amountToFree, "lowThreshold", im.policy.LowThresholdPercent)
+		// 清理空间
+		freed, err := im.freeSpace(amountToFree, time.Now())
+		if err != nil {
+			return err
+		}
+		// 如果清理过了还是小于超出，报错
+		if freed < amountToFree {
+			err := fmt.Errorf("failed to garbage collect required amount of images. Wanted to free %d bytes, but freed %d bytes", amountToFree, freed)
+			im.recorder.Eventf(im.nodeRef, v1.EventTypeWarning, events.FreeDiskSpaceFailed, err.Error())
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ImageFsStats returns the stats of the image filesystem.
+// 获取所有 image
+func (p *criStatsProvider) ImageFsStats() (*statsapi.FsStats, error) {
+	// 这边调用 grpc，获取一个数组，值为 image filesystem 的统计信息
+	// 该数组就一个下标，为 0， 值为 image filesystem 的结构体，
+	resp, err := p.imageService.ImageFsInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	// CRI may return the stats of multiple image filesystems but we only
+	// return the first one.
+	//
+	// TODO(yguo0905): Support returning stats of multiple image filesystems.
+	// 如果 resp == 0，意味着没有 images 文件系统，直接返回 nil
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("imageFs information is unavailable")
+	}
+	// resp 数组里只有一个值，获取结构体
+	fs := resp[0]
+	s := &statsapi.FsStats{
+		// Time 是时间戳，记录从现在开始 + 默认 2 分钟，
+		// 就是现在传的镜像要过 2 分钟再处理。
+		Time:      metav1.NewTime(time.Unix(0, fs.Timestamp)),
+		// 已用的字节
+		UsedBytes: &fs.UsedBytes.Value,
+	}
+	// 把 fs 使用索引节点信息传给 s
+	if fs.InodesUsed != nil {
+		s.InodesUsed = &fs.InodesUsed.Value
+	}
+	// 传了一个空结构体或者 nil
+	imageFsInfo := p.getFsInfo(fs.GetFsId())
+	// 如果 imageFsInfo 不等于空，赋值
+	if imageFsInfo != nil {
+		// The image filesystem id is unknown to the local node or there's
+		// an error on retrieving the stats. In these cases, we omit those
+		// stats and return the best-effort partial result. See
+		// https://github.com/kubernetes/heapster/issues/1793.
+		// 可用空间
+		s.AvailableBytes = &imageFsInfo.Available
+		// 总空间
+		s.CapacityBytes = &imageFsInfo.Capacity
+		s.InodesFree = imageFsInfo.InodesFree
+		s.Inodes = imageFsInfo.Inodes
+	}
+	return s, nil
+}
+
+func (im *realImageGCManager) freeSpace(bytesToFree int64, freeTime time.Time) (int64, error) {
+	// 返回了正在被使用的 images
+	imagesInUse, err := im.detectImages(freeTime)
+	if err != nil {
+		return 0, err
+	}
+
+	im.imageRecordsLock.Lock()
+	defer im.imageRecordsLock.Unlock()
+
+	// Get all images in eviction order.
+	// new 一个字典，长度为所有 image 的个数
+	images := make([]evictionInfo, 0, len(im.imageRecords))
+	for image, record := range im.imageRecords {
+		// 如果所有 image 数组里有被使用的 image，
+		// 重新执行 for 语句
+		if isImageUsed(image, imagesInUse) {
+			klog.V(5).InfoS("Image ID is being used", "imageID", image)
+			continue
+		}
+		// Check if image is pinned, prevent garbage collection
+		// 检查是否固定防止垃圾收集
+		if record.pinned {
+			klog.V(5).InfoS("Image is pinned, skipping garbage collection", "imageID", image)
+			continue
+
+		}
+		// 定义 append，追加要删除的镜像
+		images = append(images, evictionInfo{
+			id:          image,
+			imageRecord: *record,
+		})
+	}
+	// 排序
+	sort.Sort(byLastUsedAndDetected(images))
+
+	// Delete unused images until we've freed up enough space.
+	var deletionErrors []error
+	spaceFreed := int64(0)
+	for _, image := range images {
+		klog.V(5).InfoS("Evaluating image ID for possible garbage collection", "imageID", image.id)
+		// Images that are currently in used were given a newer lastUsed.
+		// 如果 image 最新使用时间 等于 2 分钟，或者小于 2 分钟，不删除
+		if image.lastUsed.Equal(freeTime) || image.lastUsed.After(freeTime) {
+			klog.V(5).InfoS("Image ID was used too recently, not eligible for garbage collection", "imageID", image.id, "lastUsed", image.lastUsed, "freeTime", freeTime)
+			continue
+		}
+
+		// Avoid garbage collect the image if the image is not old enough.
+		// In such a case, the image may have just been pulled down, and will be used by a container right away.
+		// 如果最新删除时间小于 0s，不删除，一般来说不应该有时间小于 0s
+		if freeTime.Sub(image.firstDetected) < im.policy.MinAge {
+			klog.V(5).InfoS("Image ID's age is less than the policy's minAge, not eligible for garbage collection", "imageID", image.id, "age", freeTime.Sub(image.firstDetected), "minAge", im.policy.MinAge)
+			continue
+		}
+
+		// Remove image. Continue despite errors.
+		klog.InfoS("Removing image to free bytes", "imageID", image.id, "size", image.size)
+		// 移除 image
+		err := im.runtime.RemoveImage(container.ImageSpec{Image: image.id})
+		if err != nil {
+			// 追加 error 到字典
+			deletionErrors = append(deletionErrors, err)
+			continue
+		}
+		// 删除 imageRecords 字典 已经被删除的 image id
+		delete(im.imageRecords, image.id)
+		// freespace ++
+		spaceFreed += image.size
+		// 如果 spaceFreed > 超过的百分比，结束删除镜像的循环任务
+		if spaceFreed >= bytesToFree {
+			break
+		}
+	}
+	// 如果有错误，返回 spaceFreed，error
+	if len(deletionErrors) > 0 {
+		return spaceFreed, fmt.Errorf("wanted to free %d bytes, but freed %d bytes space with errors in image deletion: %v", bytesToFree, spaceFreed, errors.NewAggregate(deletionErrors))
+	}
+	// 返回 spaceFreed，nil
+	return spaceFreed, nil
+}
+
+// 删除image
+func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, error) {
+	imagesInUse := sets.NewString()
+
+	// Always consider the container runtime pod sandbox image in use
+	// 先处理 sandbox 镜像，如果有就把它放入正在使用的字典中，如果没有这串代码等于无效
+	imageRef, err := im.runtime.GetImageRef(container.ImageSpec{Image: im.sandboxImage})
+	// 没有错误，就是获取到 sandbox，并且 imageRef != ""，就写入 imagesInUse 结构体中
+	if err == nil && imageRef != "" {
+		imagesInUse.Insert(imageRef)
+	}
+	// 获取所有 images
+	images, err := im.runtime.ListImages()
+	if err != nil {
+		return imagesInUse, err
+	}
+	// 获取 pods
+	pods, err := im.runtime.GetPods(true)
+	if err != nil {
+		return imagesInUse, err
+	}
+
+	// Make a set of images in use by containers.
+	for _, pod := range pods {
+		for _, container := range pod.Containers {
+			klog.V(5).InfoS("Container uses image", "pod", klog.KRef(pod.Namespace, pod.Name), "containerName", container.Name, "containerImage", container.Image, "imageID", container.ImageID)
+			// 把 pod 正在使用的写入镜像 imagesInUse
+			imagesInUse.Insert(container.ImageID)
+		}
+	}
+
+	// Add new images and record those being used.
+	// 记录现在事件
+	now := time.Now()
+	// new 一个字典
+	currentImages := sets.NewString()
+	// 锁
+	im.imageRecordsLock.Lock()
+	defer im.imageRecordsLock.Unlock()
+	for _, image := range images {
+		klog.V(5).InfoS("Adding image ID to currentImages", "imageID", image.ID)
+		//把image.ID，写入字典，key 为 空
+		currentImages.Insert(image.ID)
+
+		// New image, set it as detected now.
+		// 初始化 imageRecords 结构体，因为判断是 非 ok
+		if _, ok := im.imageRecords[image.ID]; !ok {
+			klog.V(5).InfoS("Image ID is new", "imageID", image.ID)
+			im.imageRecords[image.ID] = &imageRecord{
+				firstDetected: detectTime,
+			}
+		}
+
+		// Set last used time to now if the image is being used.
+		// 判断 image.ID 是不是正在使用中的
+		if isImageUsed(image.ID, imagesInUse) {
+			klog.V(5).InfoS("Setting Image ID lastUsed", "imageID", image.ID, "lastUsed", now)
+			// 是的，更新一下时间
+			im.imageRecords[image.ID].lastUsed = now
+		}
+
+		klog.V(5).InfoS("Image ID has size", "imageID", image.ID, "size", image.Size)
+		// 写入 imageRecords 大小
+		im.imageRecords[image.ID].size = image.Size
+
+		klog.V(5).InfoS("Image ID is pinned", "imageID", image.ID, "pinned", image.Pinned)
+		im.imageRecords[image.ID].pinned = image.Pinned
+	}
+
+	// Remove old images from our records.
+	for image := range im.imageRecords {
+		if !currentImages.Has(image) {
+			klog.V(5).InfoS("Image ID is no longer present; removing from imageRecords", "imageID", image)
+			delete(im.imageRecords, image)
+		}
+	}
+
+	return imagesInUse, nil
+}
+
+// get 一遍 image 信息，看一下有没有被删除或者 
+func (m *kubeGenericRuntimeManager) GetImageRef(image kubecontainer.ImageSpec) (string, error) {
+	// 根据 image 结构体条件去 get，如果没有错往下执行
+	resp, err := m.imageService.ImageStatus(toRuntimeAPIImageSpec(image), false)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get image status", "image", image.Image)
+		return "", err
+	}
+	// 如果 resp.Image 为 nil，返回 "", nil
+	// 此处判断有没有找到这个 image
+	if resp.Image == nil {
+		return "", nil
+	}
+	// 返回的是一个 string， nil
+	return resp.Image.Id, nil
+}
+
+// 获取 image 结构体
+func toRuntimeAPIImageSpec(imageSpec kubecontainer.ImageSpec) *runtimeapi.ImageSpec {
+	// 定义一个变量为 annotations 的字典
+	var annotations = make(map[string]string)
+	// 看这个 image 有没有注解，如果有注解，把注解 key 与 value 写入 annotations
+	if imageSpec.Annotations != nil {
+		for _, a := range imageSpec.Annotations {
+			annotations[a.Name] = a.Value
+		}
+	}
+	// 返回 image 结构体，此处注解应该是用来区分是不是 k8s 的镜像
+	return &runtimeapi.ImageSpec{
+		Image:       imageSpec.Image,
+		Annotations: annotations,
+	}
+}
+
+// 获取 pods
+// 整个代码不理解
+func (m *kubeGenericRuntimeManager) GetPods(all bool) ([]*kubecontainer.Pod, error) {
+	pods := make(map[kubetypes.UID]*kubecontainer.Pod)
+	// all 为 true，就是获取所有 sandbox 容器
+	// 应为每个 pod 都会有一个 sandbox，这样的话可以直接通过 sandbox metadata，namespace 获取 pod 信息
+	sandboxes, err := m.getKubeletSandboxes(all)
+	if err != nil {
+		return nil, err
+	}
+	for i := range sandboxes {
+		s := sandboxes[i]
+		if s.Metadata == nil {
+			klog.V(4).InfoS("Sandbox does not have metadata", "sandbox", s)
+			continue
+		}
+		// podUID 是 sandbox.Metadata.Uid
+		podUID := kubetypes.UID(s.Metadata.Uid)
+		// 判断有没有 pods 字典有没有 podUID，这里默认为没有，因为 pod 是 make 出来的，所以默认会写值
+		// 如果程序有点问题出现多个 sandbox 在一个 pod 里，这里不处理只处理一个就够了，因为是要获取 pod 的信息
+		if _, ok := pods[podUID]; !ok {
+			pods[podUID] = &kubecontainer.Pod{
+				ID:        podUID,
+				Name:      s.Metadata.Name,
+				Namespace: s.Metadata.Namespace,
+			}
+		}
+		// p 是 value
+		// 不理解整个 p 的作用，是 for 循环里面的，而且不是指针
+		p := pods[podUID]
+		// 返回一个结构体
+		converted, err := m.sandboxToKubeContainer(s)
+		if err != nil {
+			klog.V(4).InfoS("Convert sandbox of pod failed", "runtimeName", m.runtimeName, "sandbox", s, "podUID", podUID, "err", err)
+			continue
+		}
+		// 
+		p.Sandboxes = append(p.Sandboxes, converted)
+	}
+
+	// 获取所有容器
+	containers, err := m.getKubeletContainers(all)
+	if err != nil {
+		return nil, err
+	}
+	// 跟获取所有 sandbox 一样逻辑
+	for i := range containers {
+		c := containers[i]
+		if c.Metadata == nil {
+			klog.V(4).InfoS("Container does not have metadata", "container", c)
+			continue
+		}
+		// 此处跟删除 container 部分一样，判断容器有没有 k8s 标签
+		labelledInfo := getContainerInfoFromLabels(c.Labels)
+		pod, found := pods[labelledInfo.PodUID]
+		if !found {
+			pod = &kubecontainer.Pod{
+				ID:        labelledInfo.PodUID,
+				Name:      labelledInfo.PodName,
+				Namespace: labelledInfo.PodNamespace,
+			}
+			pods[labelledInfo.PodUID] = pod
+		}
+
+		converted, err := m.toKubeContainer(c)
+		if err != nil {
+			klog.V(4).InfoS("Convert container of pod failed", "runtimeName", m.runtimeName, "container", c, "podUID", labelledInfo.PodUID, "err", err)
+			continue
+		}
+
+		pod.Containers = append(pod.Containers, converted)
+	}
+
+	// Convert map to list.
+	var result []*kubecontainer.Pod
+	for _, pod := range pods {
+		result = append(result, pod)
+	}
+
+	return result, nil
+}
 ```
