@@ -20,18 +20,28 @@ kubelet 中容器回收过程如下:
 
 获取所有容器，然后分类为 有 k8s 标签的容器，没有 k8s 标签的容器，有标签容器 PodUID 形成 key，容器为数组，加入字典，没有标签的容器 PodUID 等于 "", 同样加入字典，不过字典里为 ""。
 
-容器回收资源也分三种，回收 container、sandbox，log，前两种是容器， log 是文件
+容器回收资源也分三种，回收 container、sandbox，log，前两种是容器， log 是文件。
 
 GC删除容器函数有三种，删除全部、删除 pod 里状态不是 run 的容器到 maximum-dead-containers-per-container 数量，删除 node 里状态不是 run 的容器到 maximum-dead-containers
 
 在回收容器是根据容器的创建时间排序的，先删除退出时间最久的。
-此处有一个容忍时间 minimum-container-ttl-duration 为 0，现在有一个不是 run 的容器就立刻删除，可以设置容忍时间，现在创的容器容忍 2 分钟
+此处有一个容忍时间 minimum-container-ttl-duration 为 0，现在有一个不是 run 的容器就立刻删除，可以设置容忍时间，现在创的容器容忍 2 分钟。
 
 
 kubelet 中镜像回收过程如下: 
 
-// 获取容器镜像挂载点文件系统的相关信息，获取到总量、可用量等，
-当容器镜像挂载点文件系统的磁盘使用率大于--image-gc-high-threshold时（containerRuntime 为 docker 时，镜像存放目录默认为 /var/lib/docker），kubelet 开始删除节点中未使用的容器镜像，直到磁盘使用率降低至--image-gc-low-threshold 时停止镜像的垃圾回收。
+获取容器镜像挂载点文件系统的相关信息，获取到总量、可用量等，通过计算判断可用量百分比。
+// 如果总量是 10，可用量是 1: 100 - （可用量 1 * 100 / 总量 10），usagePercent 就是 9 ，百分比为 90，超过 image-gc-high-threshold 85，开始执行回收函数。
+判断需要回收到多少
+// 如果总量是 10，可用量是 1: 10 * （100-80）/ 100 - 1，amountToFree 就是 1 ，就是超出 百分之 10。
+把回收多少发给删除函数，函数根据值判断什么时候停止回收
+
+回收函数：
+先获取 sandbox 镜像，如果有就写入正在使用字典
+获取所有镜像列表，获取容器镜像列表，通过计算把 pod 里 containers image.id 写入正在使用字典
+有一个持久化的镜像列表，获取所有镜像列表，把镜像 id 写入持久化镜像列表里，如果持久化列表有的镜像 id，有获取的所有镜像列表里没有，删除持久化列表镜像，这意味着获取所有列表人为删除过镜像
+// 删除是有排序的
+通过对持久化列表循环，处理 image 是不是在正在运行的列表里，是的重新执行循环，不是，执行删除任务
 ```
 
 ## Kubelet GarbageCollect 源码分析
@@ -868,7 +878,11 @@ func (im *realImageGCManager) GarbageCollect() error {
 
 	return nil
 }
+```
 
+### Kubelet 垃圾回收镜像部分之获取 image 文件系统挂载点信息源码分析
+
+```
 // ImageFsStats returns the stats of the image filesystem.
 // 获取所有 image 文件系统信息
 // ImageFsStats returns the stats of the filesystem for storing images.
@@ -905,54 +919,11 @@ func (p *cadvisorStatsProvider) ImageFsStats() (*statsapi.FsStats, error) {
 		InodesUsed:     imageFsInodesUsed,
 	}, nil
 }
+```
 
-func (p *criStatsProvider) ImageFsStats() (*statsapi.FsStats, error) {
-	// 这边调用 grpc，获取一个数组，值为 image filesystem 的相关信息
-	// 该数组就一个下标，为 0， 值为 image filesystem 的结构体，
-	resp, err := p.imageService.ImageFsInfo()
-	if err != nil {
-		return nil, err
-	}
+### Kubelet 垃圾回收镜像部分之获取所有 image 大小之和
 
-	// CRI may return the stats of multiple image filesystems but we only
-	// return the first one.
-	//
-	// TODO(yguo0905): Support returning stats of multiple image filesystems.
-	// 如果 resp == 0，意味着没有 images 文件系统，直接返回 nil
-	if len(resp) == 0 {
-		return nil, fmt.Errorf("imageFs information is unavailable")
-	}
-	// resp 数组里只有一个值，获取结构体
-	fs := resp[0]
-	s := &statsapi.FsStats{
-		// Time 是时间戳，记录从现在开始 + 默认 2 分钟，
-		// 就是现在传的镜像要过 2 分钟再处理。
-		Time:      metav1.NewTime(time.Unix(0, fs.Timestamp)),
-		// 已用的字节
-		UsedBytes: &fs.UsedBytes.Value,
-	}
-	// 把 fs 使用索引节点信息传给 s
-	if fs.InodesUsed != nil {
-		s.InodesUsed = &fs.InodesUsed.Value
-	}
-	// 传了一个空结构体或者 nil
-	imageFsInfo := p.getFsInfo(fs.GetFsId())
-	// 如果 imageFsInfo 不等于空，赋值
-	if imageFsInfo != nil {
-		// The image filesystem id is unknown to the local node or there's
-		// an error on retrieving the stats. In these cases, we omit those
-		// stats and return the best-effort partial result. See
-		// https://github.com/kubernetes/heapster/issues/1793.
-		// 可用空间
-		s.AvailableBytes = &imageFsInfo.Available
-		// 总空间
-		s.CapacityBytes = &imageFsInfo.Capacity
-		s.InodesFree = imageFsInfo.InodesFree
-		s.Inodes = imageFsInfo.Inodes
-	}
-	return s, nil
-}
-
+```
 // 获取 image 状态
 func (m *kubeGenericRuntimeManager) ImageStats() (*kubecontainer.ImageStats, error) {
 	// 这边是 grpc 调用，获取的所有 image
@@ -971,8 +942,11 @@ func (m *kubeGenericRuntimeManager) ImageStats() (*kubecontainer.ImageStats, err
 	// 返回结构体，此时结构体应该只有所有 images 字节数据
 	return stats, nil
 }
+```
 
+### Kubelet 垃圾回收镜像部分之清理空间
 
+```
 func (im *realImageGCManager) freeSpace(bytesToFree int64, freeTime time.Time) (int64, error) {
 	// 返回了正在被使用的 images
 	imagesInUse, err := im.detectImages(freeTime)
@@ -1054,7 +1028,11 @@ func (im *realImageGCManager) freeSpace(bytesToFree int64, freeTime time.Time) (
 	// 返回 spaceFreed，nil
 	return spaceFreed, nil
 }
+```
 
+### Kubelet 垃圾回收镜像部分之获取已使用镜像字典、获取全部镜像字典
+
+```
 // 删除image
 func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, error) {
 	imagesInUse := sets.NewString()
@@ -1129,7 +1107,7 @@ func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, e
 	}
 
 	// Remove old images from our records.
-	// 判断 imageRecords 字典里 镜像 id 是不是 list 获取的镜像id ，如果不是，删除 imageRecords 镜像
+	// 判断 imageRecords 字典里镜像 id 此次能不能获取，判断镜像是不是持久化的，如果在协程没执行的情况下，手动删除镜像，应该更新 imageRecords 字典
 	for image := range im.imageRecords {
 		if !currentImages.Has(image) {
 			klog.V(5).InfoS("Image ID is no longer present; removing from imageRecords", "imageID", image)
