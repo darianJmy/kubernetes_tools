@@ -23,7 +23,7 @@ $ kubectl exec jenkins-7c47df4798-pjfsz cat /var/jenkins_home/secrets/initialAdm
 - harbor 安装
 ```
 # harbor 安装比较复杂，选择简单方式安装，直接通过 helm 安装
-$ helm install harbor bitnami/harbor --set service.nodePorts=30001 -set  global.storageClass=managed-nfs-storage --set service.type=NodePort --set service.tls.enabled=false --set externalURL=http://10.10.33.34:30001
+$ helm install harbor bitnami/harbor --set service.nodePorts=30001 --set  global.storageClass=managed-nfs-storage --set service.type=NodePort --set service.tls.enabled=false --set externalURL=http://10.10.33.34:30001
 $ echo Username: "admin"
 $ echo Password: $(kubectl get secret --namespace default harbor-core-envvars -o jsonpath="{.data.HARBOR_ADMIN_PASSWORD}" | base64 --decode)
 ```
